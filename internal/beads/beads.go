@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Common errors
@@ -601,6 +602,139 @@ func (b *Beads) ClearMail(reason string) (*ClearMailResult, error) {
 	return result, nil
 }
 
+// AttachmentFields holds the attachment info for pinned beads.
+// These fields track which molecule is attached to a handoff/pinned bead.
+type AttachmentFields struct {
+	AttachedMolecule string // Root issue ID of the attached molecule
+	AttachedAt       string // ISO 8601 timestamp when attached
+}
+
+// ParseAttachmentFields extracts attachment fields from an issue's description.
+// Fields are expected as "key: value" lines. Returns nil if no attachment fields found.
+func ParseAttachmentFields(issue *Issue) *AttachmentFields {
+	if issue == nil || issue.Description == "" {
+		return nil
+	}
+
+	fields := &AttachmentFields{}
+	hasFields := false
+
+	for _, line := range strings.Split(issue.Description, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Look for "key: value" pattern
+		colonIdx := strings.Index(line, ":")
+		if colonIdx == -1 {
+			continue
+		}
+
+		key := strings.TrimSpace(line[:colonIdx])
+		value := strings.TrimSpace(line[colonIdx+1:])
+		if value == "" {
+			continue
+		}
+
+		// Map keys to fields (case-insensitive)
+		switch strings.ToLower(key) {
+		case "attached_molecule", "attached-molecule", "attachedmolecule":
+			fields.AttachedMolecule = value
+			hasFields = true
+		case "attached_at", "attached-at", "attachedat":
+			fields.AttachedAt = value
+			hasFields = true
+		}
+	}
+
+	if !hasFields {
+		return nil
+	}
+	return fields
+}
+
+// FormatAttachmentFields formats AttachmentFields as a string suitable for an issue description.
+// Only non-empty fields are included.
+func FormatAttachmentFields(fields *AttachmentFields) string {
+	if fields == nil {
+		return ""
+	}
+
+	var lines []string
+
+	if fields.AttachedMolecule != "" {
+		lines = append(lines, "attached_molecule: "+fields.AttachedMolecule)
+	}
+	if fields.AttachedAt != "" {
+		lines = append(lines, "attached_at: "+fields.AttachedAt)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// SetAttachmentFields updates an issue's description with the given attachment fields.
+// Existing attachment field lines are replaced; other content is preserved.
+// Returns the new description string.
+func SetAttachmentFields(issue *Issue, fields *AttachmentFields) string {
+	// Known attachment field keys (lowercase)
+	attachmentKeys := map[string]bool{
+		"attached_molecule":  true,
+		"attached-molecule":  true,
+		"attachedmolecule":   true,
+		"attached_at":        true,
+		"attached-at":        true,
+		"attachedat":         true,
+	}
+
+	// Collect non-attachment lines from existing description
+	var otherLines []string
+	if issue != nil && issue.Description != "" {
+		for _, line := range strings.Split(issue.Description, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				// Preserve blank lines in content
+				otherLines = append(otherLines, line)
+				continue
+			}
+
+			// Check if this is an attachment field line
+			colonIdx := strings.Index(trimmed, ":")
+			if colonIdx == -1 {
+				otherLines = append(otherLines, line)
+				continue
+			}
+
+			key := strings.ToLower(strings.TrimSpace(trimmed[:colonIdx]))
+			if !attachmentKeys[key] {
+				otherLines = append(otherLines, line)
+			}
+			// Skip attachment field lines - they'll be replaced
+		}
+	}
+
+	// Build new description: attachment fields first, then other content
+	formatted := FormatAttachmentFields(fields)
+
+	// Trim trailing blank lines from other content
+	for len(otherLines) > 0 && strings.TrimSpace(otherLines[len(otherLines)-1]) == "" {
+		otherLines = otherLines[:len(otherLines)-1]
+	}
+	// Trim leading blank lines from other content
+	for len(otherLines) > 0 && strings.TrimSpace(otherLines[0]) == "" {
+		otherLines = otherLines[1:]
+	}
+
+	if formatted == "" {
+		return strings.Join(otherLines, "\n")
+	}
+	if len(otherLines) == 0 {
+		return formatted
+	}
+
+	return formatted + "\n\n" + strings.Join(otherLines, "\n")
+}
+
 // MRFields holds the structured fields for a merge-request issue.
 // These fields are stored as key: value lines in the issue description.
 type MRFields struct {
@@ -779,4 +913,78 @@ func SetMRFields(issue *Issue, fields *MRFields) string {
 	}
 
 	return formatted + "\n\n" + strings.Join(otherLines, "\n")
+}
+
+// AttachMolecule attaches a molecule to a pinned bead by updating its description.
+// The moleculeID is the root issue ID of the molecule to attach.
+// Returns the updated issue.
+func (b *Beads) AttachMolecule(pinnedBeadID, moleculeID string) (*Issue, error) {
+	// Fetch the pinned bead
+	issue, err := b.Show(pinnedBeadID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching pinned bead: %w", err)
+	}
+
+	if issue.Status != StatusPinned {
+		return nil, fmt.Errorf("issue %s is not pinned (status: %s)", pinnedBeadID, issue.Status)
+	}
+
+	// Build attachment fields with current timestamp
+	fields := &AttachmentFields{
+		AttachedMolecule: moleculeID,
+		AttachedAt:       currentTimestamp(),
+	}
+
+	// Update description with attachment fields
+	newDesc := SetAttachmentFields(issue, fields)
+
+	// Update the issue
+	if err := b.Update(pinnedBeadID, UpdateOptions{Description: &newDesc}); err != nil {
+		return nil, fmt.Errorf("updating pinned bead: %w", err)
+	}
+
+	// Re-fetch to return updated state
+	return b.Show(pinnedBeadID)
+}
+
+// DetachMolecule removes molecule attachment from a pinned bead.
+// Returns the updated issue.
+func (b *Beads) DetachMolecule(pinnedBeadID string) (*Issue, error) {
+	// Fetch the pinned bead
+	issue, err := b.Show(pinnedBeadID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching pinned bead: %w", err)
+	}
+
+	// Check if there's anything to detach
+	if ParseAttachmentFields(issue) == nil {
+		return issue, nil // Nothing to detach
+	}
+
+	// Clear attachment fields by passing nil
+	newDesc := SetAttachmentFields(issue, nil)
+
+	// Update the issue
+	if err := b.Update(pinnedBeadID, UpdateOptions{Description: &newDesc}); err != nil {
+		return nil, fmt.Errorf("updating pinned bead: %w", err)
+	}
+
+	// Re-fetch to return updated state
+	return b.Show(pinnedBeadID)
+}
+
+// GetAttachment returns the attachment fields from a pinned bead.
+// Returns nil if no molecule is attached.
+func (b *Beads) GetAttachment(pinnedBeadID string) (*AttachmentFields, error) {
+	issue, err := b.Show(pinnedBeadID)
+	if err != nil {
+		return nil, err
+	}
+
+	return ParseAttachmentFields(issue), nil
+}
+
+// currentTimestamp returns the current time in ISO 8601 format.
+func currentTimestamp() string {
+	return time.Now().UTC().Format(time.RFC3339)
 }
