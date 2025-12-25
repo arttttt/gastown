@@ -197,6 +197,36 @@ Examples:
 	RunE: runCrewPristine,
 }
 
+var crewNextCmd = &cobra.Command{
+	Use:   "next",
+	Short: "Switch to next crew session in same rig",
+	Long: `Switch to the next crew session in the same rig.
+
+Cycles through crew sessions alphabetically. When you reach the last
+crew, wraps around to the first.
+
+This command is bound to C-b n in crew sessions for quick switching.
+
+Examples:
+  gt crew next                    # Switch to next crew in same rig`,
+	RunE: runCrewNext,
+}
+
+var crewPrevCmd = &cobra.Command{
+	Use:   "prev",
+	Short: "Switch to previous crew session in same rig",
+	Long: `Switch to the previous crew session in the same rig.
+
+Cycles through crew sessions in reverse alphabetical order. When you
+reach the first crew, wraps around to the last.
+
+This command is bound to C-b p in crew sessions for quick switching.
+
+Examples:
+  gt crew prev                    # Switch to previous crew in same rig`,
+	RunE: runCrewPrev,
+}
+
 func init() {
 	// Add flags
 	crewAddCmd.Flags().StringVar(&crewRig, "rig", "", "Rig to create crew workspace in")
@@ -236,6 +266,8 @@ func init() {
 	crewCmd.AddCommand(crewRenameCmd)
 	crewCmd.AddCommand(crewPristineCmd)
 	crewCmd.AddCommand(crewRestartCmd)
+	crewCmd.AddCommand(crewNextCmd)
+	crewCmd.AddCommand(crewPrevCmd)
 
 	rootCmd.AddCommand(crewCmd)
 }

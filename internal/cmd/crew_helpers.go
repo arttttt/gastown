@@ -239,3 +239,74 @@ func ensureMainBranch(dir, roleName string) bool {
 
 	return true
 }
+
+// parseCrewSessionName extracts rig and crew name from a tmux session name.
+// Format: gt-<rig>-crew-<name>
+// Returns empty strings and false if the format doesn't match.
+func parseCrewSessionName(sessionName string) (rigName, crewName string, ok bool) {
+	// Must start with "gt-" and contain "-crew-"
+	if !strings.HasPrefix(sessionName, "gt-") {
+		return "", "", false
+	}
+
+	// Remove "gt-" prefix
+	rest := sessionName[3:]
+
+	// Find "-crew-" separator
+	idx := strings.Index(rest, "-crew-")
+	if idx == -1 {
+		return "", "", false
+	}
+
+	rigName = rest[:idx]
+	crewName = rest[idx+6:] // len("-crew-") = 6
+
+	if rigName == "" || crewName == "" {
+		return "", "", false
+	}
+
+	return rigName, crewName, true
+}
+
+// getCurrentTmuxSession returns the current tmux session name.
+// Returns empty string if not in tmux.
+func getCurrentTmuxSession() string {
+	if os.Getenv("TMUX") == "" {
+		return ""
+	}
+
+	cmd := exec.Command("tmux", "display-message", "-p", "#{session_name}")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(out))
+}
+
+// findRigCrewSessions returns all crew sessions for a given rig, sorted alphabetically.
+// Uses tmux list-sessions to find sessions matching gt-<rig>-crew-* pattern.
+func findRigCrewSessions(rigName string) ([]string, error) {
+	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+	out, err := cmd.Output()
+	if err != nil {
+		// No tmux server or no sessions
+		return nil, nil
+	}
+
+	prefix := fmt.Sprintf("gt-%s-crew-", rigName)
+	var sessions []string
+
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, prefix) {
+			sessions = append(sessions, line)
+		}
+	}
+
+	// Sessions are already sorted by tmux, but sort explicitly for consistency
+	// (alphabetical by session name means alphabetical by crew name)
+	return sessions, nil
+}

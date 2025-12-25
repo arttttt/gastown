@@ -596,3 +596,19 @@ func (t *Tmux) SwitchClient(targetSession string) error {
 	_, err := t.run("switch-client", "-t", targetSession)
 	return err
 }
+
+// SetCrewCycleBindings sets up C-b n/p to cycle through crew sessions in the same rig.
+// This allows quick switching between crew members without using the session picker.
+func (t *Tmux) SetCrewCycleBindings(session string) error {
+	// C-b n → gt crew next (switch to next crew session)
+	if _, err := t.run("bind-key", "-T", "prefix", "n",
+		"run-shell", "gt crew next"); err != nil {
+		return err
+	}
+	// C-b p → gt crew prev (switch to previous crew session)
+	if _, err := t.run("bind-key", "-T", "prefix", "p",
+		"run-shell", "gt crew prev"); err != nil {
+		return err
+	}
+	return nil
+}

@@ -104,9 +104,8 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 	// Auto-use mol-polecat-work for issue-based spawns (Phase 3: Polecat Work Cycle)
 	// This gives polecats a structured workflow with checkpoints for crash recovery.
 	// Can be overridden with explicit --molecule flag.
-	// Note: gt-lwuu is the proto ID for mol-polecat-work
 	if spawnIssue != "" && spawnMolecule == "" {
-		spawnMolecule = "gt-lwuu"
+		spawnMolecule = "mol-polecat-work"
 	}
 
 	// Find workspace first (needed for rig inference)
