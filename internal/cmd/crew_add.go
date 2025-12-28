@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/crew"
 	"github.com/steveyegge/gastown/internal/git"
@@ -76,6 +77,27 @@ func runCrewAdd(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Path: %s\n", worker.ClonePath)
 	fmt.Printf("  Branch: %s\n", worker.Branch)
 	fmt.Printf("  Mail: %s/mail/\n", worker.ClonePath)
+
+	// Create agent bead for the crew worker
+	rigBeadsPath := filepath.Join(r.Path, "mayor", "rig")
+	bd := beads.New(rigBeadsPath)
+	crewID := fmt.Sprintf("gt-crew-%s-%s", rigName, name)
+	if _, err := bd.Show(crewID); err != nil {
+		// Agent bead doesn't exist, create it
+		fields := &beads.AgentFields{
+			RoleType:   "crew",
+			Rig:        rigName,
+			AgentState: "idle",
+			RoleBead:   crewID + "-role",
+		}
+		desc := fmt.Sprintf("Crew worker %s in %s - human-managed persistent workspace.", name, rigName)
+		if _, err := bd.CreateAgentBead(crewID, desc, fields); err != nil {
+			// Non-fatal: warn but don't fail the add
+			fmt.Printf("  %s\n", style.Dim.Render(fmt.Sprintf("Warning: could not create agent bead: %v", err)))
+		} else {
+			fmt.Printf("  Agent bead: %s\n", crewID)
+		}
+	}
 
 	fmt.Printf("\n%s\n", style.Dim.Render("Start working with: cd "+worker.ClonePath))
 

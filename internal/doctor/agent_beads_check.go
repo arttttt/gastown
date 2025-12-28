@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -12,8 +13,9 @@ import (
 // This includes:
 // - Global agents (deacon, mayor) - stored in first rig's beads
 // - Per-rig agents (witness, refinery) - stored in each rig's beads
+// - Crew workers - stored in each rig's beads
 //
-// Agent beads are created by gt rig add (see gt-h3hak, gt-pinkq).
+// Agent beads are created by gt rig add (see gt-h3hak, gt-pinkq) and gt crew add.
 //
 // NOTE: Currently, the beads library validates that agent IDs must start
 // with 'gt-'. Rigs with different prefixes (like 'bd-') cannot have agent
@@ -112,6 +114,16 @@ func (c *AgentBeadsCheck) Run(ctx *CheckContext) *CheckResult {
 			missing = append(missing, refineryID)
 		}
 		checked++
+
+		// Check crew worker agents
+		crewWorkers := listCrewWorkers(ctx.TownRoot, rigName)
+		for _, workerName := range crewWorkers {
+			crewID := fmt.Sprintf("%s-crew-%s-%s", prefix, rigName, workerName)
+			if _, err := bd.Show(crewID); err != nil {
+				missing = append(missing, crewID)
+			}
+			checked++
+		}
 
 		// Check global agents in first rig
 		if rigName == firstRigName {
@@ -236,6 +248,24 @@ func (c *AgentBeadsCheck) Fix(ctx *CheckContext) error {
 			}
 		}
 
+		// Create crew worker agents if missing
+		crewWorkers := listCrewWorkers(ctx.TownRoot, rigName)
+		for _, workerName := range crewWorkers {
+			crewID := fmt.Sprintf("%s-crew-%s-%s", prefix, rigName, workerName)
+			if _, err := bd.Show(crewID); err != nil {
+				fields := &beads.AgentFields{
+					RoleType:   "crew",
+					Rig:        rigName,
+					AgentState: "idle",
+					RoleBead:   crewID + "-role",
+				}
+				desc := fmt.Sprintf("Crew worker %s in %s - human-managed persistent workspace.", workerName, rigName)
+				if _, err := bd.CreateAgentBead(crewID, desc, fields); err != nil {
+					return fmt.Errorf("creating %s: %w", crewID, err)
+				}
+			}
+		}
+
 		// Create global agents in first rig if missing
 		if rigName == firstRigName {
 			deaconID := firstPrefix + "-deacon"
@@ -269,4 +299,21 @@ func (c *AgentBeadsCheck) Fix(ctx *CheckContext) error {
 	}
 
 	return nil
+}
+
+// listCrewWorkers returns the names of all crew workers in a rig.
+func listCrewWorkers(townRoot, rigName string) []string {
+	crewDir := filepath.Join(townRoot, rigName, "crew")
+	entries, err := os.ReadDir(crewDir)
+	if err != nil {
+		return nil // No crew directory or can't read it
+	}
+
+	var workers []string
+	for _, entry := range entries {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+			workers = append(workers, entry.Name())
+		}
+	}
+	return workers
 }
