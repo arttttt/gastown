@@ -223,5 +223,55 @@ func runDone(cmd *cobra.Command, args []string) error {
 	// Log done event
 	LogDone(townRoot, sender, issueID)
 
+	// Update agent bead state (ZFC: self-report completion)
+	updateAgentStateOnDone(cwd, townRoot, exitType, issueID)
+
 	return nil
+}
+
+// updateAgentStateOnDone updates the agent bead state when work is complete.
+// Maps exit type to agent state:
+//   - COMPLETED → "done"
+//   - ESCALATED → "stuck"
+//   - DEFERRED → "idle"
+func updateAgentStateOnDone(cwd, townRoot, exitType, issueID string) {
+	// Get role context
+	roleInfo, err := GetRoleWithContext(cwd, townRoot)
+	if err != nil {
+		return
+	}
+
+	ctx := RoleContext{
+		Role:     roleInfo.Role,
+		Rig:      roleInfo.Rig,
+		Polecat:  roleInfo.Polecat,
+		TownRoot: townRoot,
+		WorkDir:  cwd,
+	}
+
+	agentBeadID := getAgentBeadID(ctx)
+	if agentBeadID == "" {
+		return
+	}
+
+	// Map exit type to agent state
+	var newState string
+	switch exitType {
+	case ExitCompleted:
+		newState = "done"
+	case ExitEscalated:
+		newState = "stuck"
+	case ExitDeferred:
+		newState = "idle"
+	default:
+		return
+	}
+
+	// Update agent bead with new state and clear hook_bead (work is done)
+	bd := beads.New(cwd)
+	emptyHook := ""
+	if err := bd.UpdateAgentState(agentBeadID, newState, &emptyHook); err != nil {
+		// Silently ignore - beads might not be configured
+		return
+	}
 }

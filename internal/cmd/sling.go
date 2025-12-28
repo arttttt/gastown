@@ -239,6 +239,9 @@ func runSling(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("%s Work attached to hook (pinned bead)\n", style.Bold.Render("✓"))
 
+	// Update agent bead's hook_bead field (ZFC: agents track their current work)
+	updateAgentHookBead(targetAgent, beadID)
+
 	// Store args in bead description (no-tmux mode: beads as data plane)
 	if slingArgs != "" {
 		if err := storeArgsInBead(beadID, slingArgs); err != nil {
@@ -600,6 +603,9 @@ func runSlingFormula(args []string) error {
 	}
 	fmt.Printf("%s Attached to hook (pinned bead)\n", style.Bold.Render("✓"))
 
+	// Update agent bead's hook_bead field (ZFC: agents track their current work)
+	updateAgentHookBead(targetAgent, wispResult.RootID)
+
 	// Store args in wisp bead if provided (no-tmux mode: beads as data plane)
 	if slingArgs != "" {
 		if err := storeArgsInBead(wispResult.RootID, slingArgs); err != nil {
@@ -631,4 +637,63 @@ func runSlingFormula(args []string) error {
 	}
 
 	return nil
+}
+
+// updateAgentHookBead updates the agent bead's hook_bead field when work is slung.
+// This enables the witness to see what each agent is working on.
+func updateAgentHookBead(agentID, beadID string) {
+	// Convert agent ID to agent bead ID
+	// Format examples:
+	//   gastown/crew/max -> gt-crew-gastown-max
+	//   gastown/polecats/Toast -> gt-polecat-gastown-Toast
+	//   mayor -> gt-mayor
+	//   gastown/witness -> gt-witness-gastown
+	agentBeadID := agentIDToBeadID(agentID)
+	if agentBeadID == "" {
+		return
+	}
+
+	// Find beads directory - try current directory first
+	workDir, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	bd := beads.New(workDir)
+	if err := bd.UpdateAgentState(agentBeadID, "running", &beadID); err != nil {
+		// Silently ignore - agent bead might not exist yet
+		return
+	}
+}
+
+// agentIDToBeadID converts an agent ID to its corresponding agent bead ID.
+func agentIDToBeadID(agentID string) string {
+	// Handle simple cases
+	if agentID == "mayor" {
+		return "gt-mayor"
+	}
+	if agentID == "deacon" {
+		return "gt-deacon"
+	}
+
+	// Parse path-style agent IDs
+	parts := strings.Split(agentID, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+
+	rig := parts[0]
+
+	switch {
+	case len(parts) == 2 && parts[1] == "witness":
+		return fmt.Sprintf("gt-witness-%s", rig)
+	case len(parts) == 2 && parts[1] == "refinery":
+		return fmt.Sprintf("gt-refinery-%s", rig)
+	case len(parts) == 3 && parts[1] == "crew":
+		return fmt.Sprintf("gt-crew-%s-%s", rig, parts[2])
+	case len(parts) == 3 && parts[1] == "polecats":
+		return fmt.Sprintf("gt-polecat-%s-%s", rig, parts[2])
+	default:
+		return ""
+	}
 }

@@ -1055,6 +1055,7 @@ func acquireIdentityLock(ctx RoleContext) error {
 // reportAgentState updates the agent bead to report the agent's current state.
 // This implements ZFC-compliant self-reporting of agent state.
 // Agents call this on startup (running) and shutdown (stopped).
+// For crew workers, creates the agent bead if it doesn't exist.
 func reportAgentState(ctx RoleContext, state string) {
 	agentBeadID := getAgentBeadID(ctx)
 	if agentBeadID == "" {
@@ -1064,10 +1065,74 @@ func reportAgentState(ctx RoleContext, state string) {
 	// Use the beads API directly to update agent state
 	// This is more reliable than shelling out to bd
 	bd := beads.New(ctx.WorkDir)
+
+	// Check if agent bead exists, create if needed (especially for crew workers)
+	if _, err := bd.Show(agentBeadID); err != nil {
+		// Agent bead doesn't exist - create it
+		fields := getAgentFields(ctx, state)
+		if fields != nil {
+			_, createErr := bd.CreateAgentBead(agentBeadID, agentBeadID, fields)
+			if createErr != nil {
+				// Silently ignore - beads might not be configured
+				return
+			}
+			// Bead created with initial state, no need to update
+			return
+		}
+	}
+
+	// Update existing agent bead state
 	if err := bd.UpdateAgentState(agentBeadID, state, nil); err != nil {
 		// Silently ignore errors - don't fail prime if state reporting fails
-		// This can fail if beads isn't set up or agent bead doesn't exist
 		return
+	}
+}
+
+// getAgentFields returns the AgentFields for creating a new agent bead.
+func getAgentFields(ctx RoleContext, state string) *beads.AgentFields {
+	switch ctx.Role {
+	case RoleCrew:
+		return &beads.AgentFields{
+			RoleType:   "crew",
+			Rig:        ctx.Rig,
+			AgentState: state,
+			RoleBead:   fmt.Sprintf("gt-crew-%s-%s-role", ctx.Rig, ctx.Polecat),
+		}
+	case RolePolecat:
+		return &beads.AgentFields{
+			RoleType:   "polecat",
+			Rig:        ctx.Rig,
+			AgentState: state,
+			RoleBead:   fmt.Sprintf("gt-polecat-%s-%s-role", ctx.Rig, ctx.Polecat),
+		}
+	case RoleMayor:
+		return &beads.AgentFields{
+			RoleType:   "mayor",
+			AgentState: state,
+			RoleBead:   "gt-mayor-role",
+		}
+	case RoleDeacon:
+		return &beads.AgentFields{
+			RoleType:   "deacon",
+			AgentState: state,
+			RoleBead:   "gt-deacon-role",
+		}
+	case RoleWitness:
+		return &beads.AgentFields{
+			RoleType:   "witness",
+			Rig:        ctx.Rig,
+			AgentState: state,
+			RoleBead:   fmt.Sprintf("gt-witness-%s-role", ctx.Rig),
+		}
+	case RoleRefinery:
+		return &beads.AgentFields{
+			RoleType:   "refinery",
+			Rig:        ctx.Rig,
+			AgentState: state,
+			RoleBead:   fmt.Sprintf("gt-refinery-%s-role", ctx.Rig),
+		}
+	default:
+		return nil
 	}
 }
 

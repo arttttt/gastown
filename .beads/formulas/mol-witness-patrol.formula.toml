@@ -187,8 +187,10 @@ Each polecat agent bead has fields in its description:
 |-------------|---------|--------|
 | running | Actively working | Check progress (Step 3) |
 | idle | No work assigned | Skip (no action needed) |
-| stuck | Self-reported stuck | Handle stuck protocol |
-| done | Work complete | Verify cleanup triggered (see Step 4a) |
+| stuck | Self-reported stuck (via gt done --exit ESCALATED) | Handle stuck protocol |
+| done | Work complete (via gt done) | Verify cleanup triggered (see Step 4a) |
+| dead | Marked dead by daemon (unresponsive) | Clean up and respawn |
+| spawning | Recently created, initializing | Wait for running state |
 
 **Step 3: For running polecats, assess progress**
 
@@ -216,6 +218,8 @@ Look for:
 | agent_state=running, idle 15+ min | Direct nudge with deadline |
 | agent_state=stuck | Assess and help or escalate |
 | agent_state=done | Verify cleanup triggered (see Step 4a) |
+| agent_state=dead | Create cleanup wisp, mark for respawn if needed |
+| agent_state=spawning | Check if stuck in spawn; if >2 min, investigate |
 
 **Step 4a: Handle agent_state=done**
 
