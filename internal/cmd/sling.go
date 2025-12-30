@@ -218,9 +218,14 @@ func runSling(cmd *cobra.Command, args []string) error {
 	}
 
 	if slingDryRun {
-		fmt.Printf("Would run: bd update %s --status=hooked --assignee=%s\n", beadID, targetAgent)
 		if formulaName != "" {
-			fmt.Printf("  formula: %s\n", formulaName)
+			fmt.Printf("Would instantiate formula %s:\n", formulaName)
+			fmt.Printf("  1. bd cook %s\n", formulaName)
+			fmt.Printf("  2. bd mol wisp %s --var feature=\"%s\"\n", formulaName, info.Title)
+			fmt.Printf("  3. bd mol bond <wisp-root> %s\n", beadID)
+			fmt.Printf("  4. bd update <compound-root> --status=hooked --assignee=%s\n", targetAgent)
+		} else {
+			fmt.Printf("Would run: bd update %s --status=hooked --assignee=%s\n", beadID, targetAgent)
 		}
 		if slingSubject != "" {
 			fmt.Printf("  subject (in nudge): %s\n", slingSubject)
@@ -233,6 +238,64 @@ func runSling(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("Would inject start prompt to pane: %s\n", targetPane)
 		return nil
+	}
+
+	// Formula-on-bead mode: instantiate formula and bond to original bead
+	if formulaName != "" {
+		fmt.Printf("  Instantiating formula %s...\n", formulaName)
+
+		// Step 1: Cook the formula (ensures proto exists)
+		cookCmd := exec.Command("bd", "cook", formulaName)
+		cookCmd.Stderr = os.Stderr
+		if err := cookCmd.Run(); err != nil {
+			return fmt.Errorf("cooking formula %s: %w", formulaName, err)
+		}
+
+		// Step 2: Create wisp with feature variable from bead title
+		featureVar := fmt.Sprintf("feature=%s", info.Title)
+		wispArgs := []string{"mol", "wisp", formulaName, "--var", featureVar, "--json"}
+		wispCmd := exec.Command("bd", wispArgs...)
+		wispCmd.Stderr = os.Stderr
+		wispOut, err := wispCmd.Output()
+		if err != nil {
+			return fmt.Errorf("creating wisp for formula %s: %w", formulaName, err)
+		}
+
+		// Parse wisp output to get the root ID
+		var wispResult struct {
+			RootID string `json:"root_id"`
+		}
+		if err := json.Unmarshal(wispOut, &wispResult); err != nil {
+			return fmt.Errorf("parsing wisp output: %w", err)
+		}
+		wispRootID := wispResult.RootID
+		fmt.Printf("%s Formula wisp created: %s\n", style.Bold.Render("✓"), wispRootID)
+
+		// Step 3: Bond wisp to original bead (creates compound)
+		bondArgs := []string{"mol", "bond", wispRootID, beadID, "--json"}
+		bondCmd := exec.Command("bd", bondArgs...)
+		bondCmd.Stderr = os.Stderr
+		bondOut, err := bondCmd.Output()
+		if err != nil {
+			return fmt.Errorf("bonding formula to bead: %w", err)
+		}
+
+		// Parse bond output - the wisp root becomes the compound root
+		// After bonding, we hook the wisp root (which now contains the original bead)
+		var bondResult struct {
+			RootID string `json:"root_id"`
+		}
+		if err := json.Unmarshal(bondOut, &bondResult); err != nil {
+			// Fallback: use wisp root as the compound root
+			fmt.Printf("%s Could not parse bond output, using wisp root\n", style.Dim.Render("Warning:"))
+		} else if bondResult.RootID != "" {
+			wispRootID = bondResult.RootID
+		}
+
+		fmt.Printf("%s Formula bonded to %s\n", style.Bold.Render("✓"), beadID)
+
+		// Update beadID to hook the compound root instead of bare bead
+		beadID = wispRootID
 	}
 
 	// Hook the bead using bd update (discovery-based approach)
@@ -395,6 +458,7 @@ func verifyBeadExists(beadID string) error {
 
 // beadInfo holds status and assignee for a bead.
 type beadInfo struct {
+	Title    string `json:"title"`
 	Status   string `json:"status"`
 	Assignee string `json:"assignee"`
 }
