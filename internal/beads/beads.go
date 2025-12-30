@@ -888,3 +888,68 @@ func IsAgentSessionBead(beadID string) bool {
 		return false
 	}
 }
+
+// Role bead ID naming convention:
+//   gt-<role>-role
+//
+// Examples:
+//   - gt-mayor-role
+//   - gt-deacon-role
+//   - gt-witness-role
+//   - gt-refinery-role
+//   - gt-crew-role
+//   - gt-polecat-role
+
+// RoleBeadID returns the role bead ID for a given role type.
+// Role beads define lifecycle configuration for each agent type.
+func RoleBeadID(roleType string) string {
+	return "gt-" + roleType + "-role"
+}
+
+// MayorRoleBeadID returns the Mayor role bead ID.
+func MayorRoleBeadID() string {
+	return RoleBeadID("mayor")
+}
+
+// DeaconRoleBeadID returns the Deacon role bead ID.
+func DeaconRoleBeadID() string {
+	return RoleBeadID("deacon")
+}
+
+// WitnessRoleBeadID returns the Witness role bead ID.
+func WitnessRoleBeadID() string {
+	return RoleBeadID("witness")
+}
+
+// RefineryRoleBeadID returns the Refinery role bead ID.
+func RefineryRoleBeadID() string {
+	return RoleBeadID("refinery")
+}
+
+// CrewRoleBeadID returns the Crew role bead ID.
+func CrewRoleBeadID() string {
+	return RoleBeadID("crew")
+}
+
+// PolecatRoleBeadID returns the Polecat role bead ID.
+func PolecatRoleBeadID() string {
+	return RoleBeadID("polecat")
+}
+
+// GetRoleConfig looks up a role bead and returns its parsed RoleConfig.
+// Returns nil, nil if the role bead doesn't exist or has no config.
+func (b *Beads) GetRoleConfig(roleBeadID string) (*RoleConfig, error) {
+	issue, err := b.Show(roleBeadID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if issue.Type != "role" {
+		return nil, fmt.Errorf("bead %s is not a role bead (type: %s)", roleBeadID, issue.Type)
+	}
+
+	return ParseRoleConfig(issue.Description), nil
+}

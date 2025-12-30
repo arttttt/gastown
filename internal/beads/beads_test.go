@@ -1073,3 +1073,307 @@ func TestIsAgentSessionBead(t *testing.T) {
 		})
 	}
 }
+
+// TestParseRoleConfig tests parsing role configuration from descriptions.
+func TestParseRoleConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+		wantNil     bool
+		wantConfig  *RoleConfig
+	}{
+		{
+			name:        "empty description",
+			description: "",
+			wantNil:     true,
+		},
+		{
+			name:        "no role config fields",
+			description: "This is just plain text\nwith no role config fields",
+			wantNil:     true,
+		},
+		{
+			name: "all fields",
+			description: `session_pattern: gt-{rig}-{name}
+work_dir_pattern: {town}/{rig}/polecats/{name}
+needs_pre_sync: true
+start_command: exec claude --dangerously-skip-permissions
+env_var: GT_ROLE=polecat
+env_var: GT_RIG={rig}`,
+			wantConfig: &RoleConfig{
+				SessionPattern: "gt-{rig}-{name}",
+				WorkDirPattern: "{town}/{rig}/polecats/{name}",
+				NeedsPreSync:   true,
+				StartCommand:   "exec claude --dangerously-skip-permissions",
+				EnvVars:        map[string]string{"GT_ROLE": "polecat", "GT_RIG": "{rig}"},
+			},
+		},
+		{
+			name: "partial fields",
+			description: `session_pattern: gt-mayor
+work_dir_pattern: {town}`,
+			wantConfig: &RoleConfig{
+				SessionPattern: "gt-mayor",
+				WorkDirPattern: "{town}",
+				EnvVars:        map[string]string{},
+			},
+		},
+		{
+			name: "mixed with prose",
+			description: `You are the Witness.
+
+session_pattern: gt-{rig}-witness
+work_dir_pattern: {town}/{rig}
+needs_pre_sync: false
+
+Your job is to monitor workers.`,
+			wantConfig: &RoleConfig{
+				SessionPattern: "gt-{rig}-witness",
+				WorkDirPattern: "{town}/{rig}",
+				NeedsPreSync:   false,
+				EnvVars:        map[string]string{},
+			},
+		},
+		{
+			name: "alternate key formats (hyphen)",
+			description: `session-pattern: gt-{rig}-{name}
+work-dir-pattern: {town}/{rig}/polecats/{name}
+needs-pre-sync: true`,
+			wantConfig: &RoleConfig{
+				SessionPattern: "gt-{rig}-{name}",
+				WorkDirPattern: "{town}/{rig}/polecats/{name}",
+				NeedsPreSync:   true,
+				EnvVars:        map[string]string{},
+			},
+		},
+		{
+			name: "case insensitive keys",
+			description: `SESSION_PATTERN: gt-mayor
+Work_Dir_Pattern: {town}`,
+			wantConfig: &RoleConfig{
+				SessionPattern: "gt-mayor",
+				WorkDirPattern: "{town}",
+				EnvVars:        map[string]string{},
+			},
+		},
+		{
+			name: "ignores null values",
+			description: `session_pattern: gt-{rig}-witness
+work_dir_pattern: null
+needs_pre_sync: false`,
+			wantConfig: &RoleConfig{
+				SessionPattern: "gt-{rig}-witness",
+				EnvVars:        map[string]string{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := ParseRoleConfig(tt.description)
+
+			if tt.wantNil {
+				if config != nil {
+					t.Errorf("ParseRoleConfig() = %+v, want nil", config)
+				}
+				return
+			}
+
+			if config == nil {
+				t.Fatal("ParseRoleConfig() = nil, want non-nil")
+			}
+
+			if config.SessionPattern != tt.wantConfig.SessionPattern {
+				t.Errorf("SessionPattern = %q, want %q", config.SessionPattern, tt.wantConfig.SessionPattern)
+			}
+			if config.WorkDirPattern != tt.wantConfig.WorkDirPattern {
+				t.Errorf("WorkDirPattern = %q, want %q", config.WorkDirPattern, tt.wantConfig.WorkDirPattern)
+			}
+			if config.NeedsPreSync != tt.wantConfig.NeedsPreSync {
+				t.Errorf("NeedsPreSync = %v, want %v", config.NeedsPreSync, tt.wantConfig.NeedsPreSync)
+			}
+			if config.StartCommand != tt.wantConfig.StartCommand {
+				t.Errorf("StartCommand = %q, want %q", config.StartCommand, tt.wantConfig.StartCommand)
+			}
+			if len(config.EnvVars) != len(tt.wantConfig.EnvVars) {
+				t.Errorf("EnvVars len = %d, want %d", len(config.EnvVars), len(tt.wantConfig.EnvVars))
+			}
+			for k, v := range tt.wantConfig.EnvVars {
+				if config.EnvVars[k] != v {
+					t.Errorf("EnvVars[%q] = %q, want %q", k, config.EnvVars[k], v)
+				}
+			}
+		})
+	}
+}
+
+// TestExpandRolePattern tests pattern expansion with placeholders.
+func TestExpandRolePattern(t *testing.T) {
+	tests := []struct {
+		pattern  string
+		townRoot string
+		rig      string
+		name     string
+		role     string
+		want     string
+	}{
+		{
+			pattern:  "gt-mayor",
+			townRoot: "/Users/stevey/gt",
+			want:     "gt-mayor",
+		},
+		{
+			pattern:  "gt-{rig}-{role}",
+			townRoot: "/Users/stevey/gt",
+			rig:      "gastown",
+			role:     "witness",
+			want:     "gt-gastown-witness",
+		},
+		{
+			pattern:  "gt-{rig}-{name}",
+			townRoot: "/Users/stevey/gt",
+			rig:      "gastown",
+			name:     "toast",
+			want:     "gt-gastown-toast",
+		},
+		{
+			pattern:  "{town}/{rig}/polecats/{name}",
+			townRoot: "/Users/stevey/gt",
+			rig:      "gastown",
+			name:     "toast",
+			want:     "/Users/stevey/gt/gastown/polecats/toast",
+		},
+		{
+			pattern:  "{town}/{rig}/refinery/rig",
+			townRoot: "/Users/stevey/gt",
+			rig:      "gastown",
+			want:     "/Users/stevey/gt/gastown/refinery/rig",
+		},
+		{
+			pattern:  "export GT_ROLE={role} GT_RIG={rig} BD_ACTOR={rig}/polecats/{name}",
+			townRoot: "/Users/stevey/gt",
+			rig:      "gastown",
+			name:     "toast",
+			role:     "polecat",
+			want:     "export GT_ROLE=polecat GT_RIG=gastown BD_ACTOR=gastown/polecats/toast",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern, func(t *testing.T) {
+			got := ExpandRolePattern(tt.pattern, tt.townRoot, tt.rig, tt.name, tt.role)
+			if got != tt.want {
+				t.Errorf("ExpandRolePattern() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFormatRoleConfig tests formatting role config to string.
+func TestFormatRoleConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *RoleConfig
+		want   string
+	}{
+		{
+			name:   "nil config",
+			config: nil,
+			want:   "",
+		},
+		{
+			name:   "empty config",
+			config: &RoleConfig{EnvVars: map[string]string{}},
+			want:   "",
+		},
+		{
+			name: "all fields",
+			config: &RoleConfig{
+				SessionPattern: "gt-{rig}-{name}",
+				WorkDirPattern: "{town}/{rig}/polecats/{name}",
+				NeedsPreSync:   true,
+				StartCommand:   "exec claude",
+				EnvVars:        map[string]string{},
+			},
+			want: `session_pattern: gt-{rig}-{name}
+work_dir_pattern: {town}/{rig}/polecats/{name}
+needs_pre_sync: true
+start_command: exec claude`,
+		},
+		{
+			name: "only session pattern",
+			config: &RoleConfig{
+				SessionPattern: "gt-mayor",
+				EnvVars:        map[string]string{},
+			},
+			want: "session_pattern: gt-mayor",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatRoleConfig(tt.config)
+			if got != tt.want {
+				t.Errorf("FormatRoleConfig() =\n%q\nwant\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRoleConfigRoundTrip tests that parse/format round-trips correctly.
+func TestRoleConfigRoundTrip(t *testing.T) {
+	original := &RoleConfig{
+		SessionPattern: "gt-{rig}-{name}",
+		WorkDirPattern: "{town}/{rig}/polecats/{name}",
+		NeedsPreSync:   true,
+		StartCommand:   "exec claude --dangerously-skip-permissions",
+		EnvVars:        map[string]string{}, // Can't round-trip env vars due to order
+	}
+
+	// Format to string
+	formatted := FormatRoleConfig(original)
+
+	// Parse back
+	parsed := ParseRoleConfig(formatted)
+
+	if parsed == nil {
+		t.Fatal("round-trip parse returned nil")
+	}
+
+	if parsed.SessionPattern != original.SessionPattern {
+		t.Errorf("round-trip SessionPattern = %q, want %q", parsed.SessionPattern, original.SessionPattern)
+	}
+	if parsed.WorkDirPattern != original.WorkDirPattern {
+		t.Errorf("round-trip WorkDirPattern = %q, want %q", parsed.WorkDirPattern, original.WorkDirPattern)
+	}
+	if parsed.NeedsPreSync != original.NeedsPreSync {
+		t.Errorf("round-trip NeedsPreSync = %v, want %v", parsed.NeedsPreSync, original.NeedsPreSync)
+	}
+	if parsed.StartCommand != original.StartCommand {
+		t.Errorf("round-trip StartCommand = %q, want %q", parsed.StartCommand, original.StartCommand)
+	}
+}
+
+// TestRoleBeadID tests role bead ID generation.
+func TestRoleBeadID(t *testing.T) {
+	tests := []struct {
+		roleType string
+		want     string
+	}{
+		{"mayor", "gt-mayor-role"},
+		{"deacon", "gt-deacon-role"},
+		{"witness", "gt-witness-role"},
+		{"refinery", "gt-refinery-role"},
+		{"crew", "gt-crew-role"},
+		{"polecat", "gt-polecat-role"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.roleType, func(t *testing.T) {
+			got := RoleBeadID(tt.roleType)
+			if got != tt.want {
+				t.Errorf("RoleBeadID(%q) = %q, want %q", tt.roleType, got, tt.want)
+			}
+		})
+	}
+}

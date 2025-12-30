@@ -216,112 +216,131 @@ func (d *Daemon) executeLifecycleAction(request *LifecycleRequest) error {
 	}
 }
 
-// identityToSession converts a beads identity to a tmux session name.
-func (d *Daemon) identityToSession(identity string) string {
-	// Handle known identities
+// ParsedIdentity holds the components extracted from an agent identity string.
+// This is used to look up the appropriate role bead for lifecycle config.
+type ParsedIdentity struct {
+	RoleType string // mayor, deacon, witness, refinery, crew, polecat
+	RigName  string // Empty for town-level agents (mayor, deacon)
+	AgentName string // Empty for singletons (mayor, deacon, witness, refinery)
+}
+
+// parseIdentity extracts role type, rig name, and agent name from an identity string.
+// This is the ONLY place where identity string patterns are parsed.
+// All other functions should use the extracted components to look up role beads.
+func parseIdentity(identity string) (*ParsedIdentity, error) {
 	switch identity {
 	case "mayor":
-		return "gt-mayor"
+		return &ParsedIdentity{RoleType: "mayor"}, nil
+	case "deacon":
+		return &ParsedIdentity{RoleType: "deacon"}, nil
+	}
+
+	// Pattern: <rig>-witness → witness role
+	if strings.HasSuffix(identity, "-witness") {
+		rigName := strings.TrimSuffix(identity, "-witness")
+		return &ParsedIdentity{RoleType: "witness", RigName: rigName}, nil
+	}
+
+	// Pattern: <rig>-refinery → refinery role
+	if strings.HasSuffix(identity, "-refinery") {
+		rigName := strings.TrimSuffix(identity, "-refinery")
+		return &ParsedIdentity{RoleType: "refinery", RigName: rigName}, nil
+	}
+
+	// Pattern: <rig>-crew-<name> → crew role
+	if strings.Contains(identity, "-crew-") {
+		parts := strings.SplitN(identity, "-crew-", 2)
+		if len(parts) == 2 {
+			return &ParsedIdentity{RoleType: "crew", RigName: parts[0], AgentName: parts[1]}, nil
+		}
+	}
+
+	// Pattern: <rig>-polecat-<name> → polecat role
+	if strings.Contains(identity, "-polecat-") {
+		parts := strings.SplitN(identity, "-polecat-", 2)
+		if len(parts) == 2 {
+			return &ParsedIdentity{RoleType: "polecat", RigName: parts[0], AgentName: parts[1]}, nil
+		}
+	}
+
+	// Pattern: <rig>/polecats/<name> → polecat role (slash format)
+	if strings.Contains(identity, "/polecats/") {
+		parts := strings.Split(identity, "/polecats/")
+		if len(parts) == 2 {
+			return &ParsedIdentity{RoleType: "polecat", RigName: parts[0], AgentName: parts[1]}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("unknown identity format: %s", identity)
+}
+
+// getRoleConfigForIdentity looks up the role bead for an identity and returns its config.
+// Falls back to default config if role bead doesn't exist or has no config.
+func (d *Daemon) getRoleConfigForIdentity(identity string) (*beads.RoleConfig, *ParsedIdentity, error) {
+	parsed, err := parseIdentity(identity)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Look up role bead
+	roleBeadID := beads.RoleBeadID(parsed.RoleType)
+	b := beads.New(d.config.TownRoot)
+	config, err := b.GetRoleConfig(roleBeadID)
+	if err != nil {
+		d.logger.Printf("Warning: failed to get role config for %s: %v", roleBeadID, err)
+	}
+
+	// Return parsed identity even if config is nil (caller can use defaults)
+	return config, parsed, nil
+}
+
+// identityToSession converts a beads identity to a tmux session name.
+// Uses role bead config if available, falls back to hardcoded patterns.
+func (d *Daemon) identityToSession(identity string) string {
+	config, parsed, err := d.getRoleConfigForIdentity(identity)
+	if err != nil {
+		return ""
+	}
+
+	// If role bead has session_pattern, use it
+	if config != nil && config.SessionPattern != "" {
+		return beads.ExpandRolePattern(config.SessionPattern, d.config.TownRoot, parsed.RigName, parsed.AgentName, parsed.RoleType)
+	}
+
+	// Fallback: use default patterns based on role type
+	switch parsed.RoleType {
+	case "mayor", "deacon":
+		return "gt-" + parsed.RoleType
+	case "witness", "refinery":
+		return fmt.Sprintf("gt-%s-%s", parsed.RigName, parsed.RoleType)
+	case "crew":
+		return fmt.Sprintf("gt-%s-crew-%s", parsed.RigName, parsed.AgentName)
+	case "polecat":
+		return fmt.Sprintf("gt-%s-%s", parsed.RigName, parsed.AgentName)
 	default:
-		// Pattern: <rig>-witness → gt-<rig>-witness
-		if strings.HasSuffix(identity, "-witness") {
-			return "gt-" + identity
-		}
-		// Pattern: <rig>-refinery → gt-<rig>-refinery
-		if strings.HasSuffix(identity, "-refinery") {
-			return "gt-" + identity
-		}
-		// Pattern: <rig>-crew-<name> → gt-<rig>-crew-<name>
-		if strings.Contains(identity, "-crew-") {
-			return "gt-" + identity
-		}
-		// Pattern: <rig>-polecat-<name> or <rig>/polecats/<name> → gt-<rig>-<name>
-		if strings.Contains(identity, "-polecat-") {
-			// <rig>-polecat-<name> → gt-<rig>-<name>
-			parts := strings.SplitN(identity, "-polecat-", 2)
-			if len(parts) == 2 {
-				return fmt.Sprintf("gt-%s-%s", parts[0], parts[1])
-			}
-		}
-		if strings.Contains(identity, "/polecats/") {
-			// <rig>/polecats/<name> → gt-<rig>-<name>
-			parts := strings.Split(identity, "/polecats/")
-			if len(parts) == 2 {
-				return fmt.Sprintf("gt-%s-%s", parts[0], parts[1])
-			}
-		}
-		// Unknown identity
 		return ""
 	}
 }
 
 // restartSession starts a new session for the given agent.
+// Uses role bead config if available, falls back to hardcoded defaults.
 func (d *Daemon) restartSession(sessionName, identity string) error {
-	// Determine working directory and startup command based on agent type
-	var workDir, startCmd string
-	var rigName string
-	var agentRole string
-	var needsPreSync bool
-
-	if identity == "mayor" {
-		workDir = d.config.TownRoot
-		startCmd = "exec claude --dangerously-skip-permissions"
-		agentRole = "coordinator"
-	} else if strings.HasSuffix(identity, "-witness") {
-		// Extract rig name: <rig>-witness → <rig>
-		rigName = strings.TrimSuffix(identity, "-witness")
-		workDir = d.config.TownRoot + "/" + rigName
-		startCmd = "exec claude --dangerously-skip-permissions"
-		agentRole = "witness"
-	} else if strings.HasSuffix(identity, "-refinery") {
-		// Extract rig name: <rig>-refinery → <rig>
-		rigName = strings.TrimSuffix(identity, "-refinery")
-		workDir = filepath.Join(d.config.TownRoot, rigName, "refinery", "rig")
-		startCmd = "exec claude --dangerously-skip-permissions"
-		agentRole = "refinery"
-		needsPreSync = true
-	} else if strings.Contains(identity, "-crew-") {
-		// Extract rig and crew name: <rig>-crew-<name> → <rig>, <name>
-		parts := strings.SplitN(identity, "-crew-", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid crew identity format: %s", identity)
-		}
-		rigName = parts[0]
-		crewName := parts[1]
-		workDir = filepath.Join(d.config.TownRoot, rigName, "crew", crewName)
-		startCmd = "exec claude --dangerously-skip-permissions"
-		agentRole = "crew"
-		needsPreSync = true
-	} else if strings.Contains(identity, "-polecat-") || strings.Contains(identity, "/polecats/") {
-		// Extract rig and polecat name from either format:
-		// <rig>-polecat-<name> or <rig>/polecats/<name>
-		var polecatName string
-		if strings.Contains(identity, "-polecat-") {
-			parts := strings.SplitN(identity, "-polecat-", 2)
-			if len(parts) != 2 {
-				return fmt.Errorf("invalid polecat identity format: %s", identity)
-			}
-			rigName = parts[0]
-			polecatName = parts[1]
-		} else {
-			parts := strings.Split(identity, "/polecats/")
-			if len(parts) != 2 {
-				return fmt.Errorf("invalid polecat identity format: %s", identity)
-			}
-			rigName = parts[0]
-			polecatName = parts[1]
-		}
-		workDir = filepath.Join(d.config.TownRoot, rigName, "polecats", polecatName)
-		bdActor := fmt.Sprintf("%s/polecats/%s", rigName, polecatName)
-		startCmd = fmt.Sprintf("export GT_ROLE=polecat GT_RIG=%s GT_POLECAT=%s BD_ACTOR=%s && claude --dangerously-skip-permissions",
-			rigName, polecatName, bdActor)
-		agentRole = "polecat"
-		needsPreSync = true
-	} else {
-		return fmt.Errorf("don't know how to restart %s", identity)
+	// Get role config for this identity
+	config, parsed, err := d.getRoleConfigForIdentity(identity)
+	if err != nil {
+		return fmt.Errorf("parsing identity: %w", err)
 	}
 
-	// Pre-sync workspace for agents with git worktrees (refinery)
+	// Determine working directory
+	workDir := d.getWorkDir(config, parsed)
+	if workDir == "" {
+		return fmt.Errorf("cannot determine working directory for %s", identity)
+	}
+
+	// Determine if pre-sync is needed
+	needsPreSync := d.getNeedsPreSync(config, parsed)
+
+	// Pre-sync workspace for agents with git worktrees
 	if needsPreSync {
 		d.logger.Printf("Pre-syncing workspace for %s at %s", identity, workDir)
 		d.syncWorkspace(workDir)
@@ -332,22 +351,14 @@ func (d *Daemon) restartSession(sessionName, identity string) error {
 		return fmt.Errorf("creating session: %w", err)
 	}
 
-	// Set environment (non-fatal: session works without these)
-	_ = d.tmux.SetEnvironment(sessionName, "GT_ROLE", identity)
-	// BD_ACTOR uses slashes instead of dashes for path-like identity
-	bdActor := identityToBDActor(identity)
-	_ = d.tmux.SetEnvironment(sessionName, "BD_ACTOR", bdActor)
+	// Set environment variables
+	d.setSessionEnvironment(sessionName, identity, config, parsed)
 
 	// Apply theme (non-fatal: theming failure doesn't affect operation)
-	if identity == "mayor" {
-		theme := tmux.MayorTheme()
-		_ = d.tmux.ConfigureGasTownSession(sessionName, theme, "", "Mayor", "coordinator")
-	} else if rigName != "" {
-		theme := tmux.AssignTheme(rigName)
-		_ = d.tmux.ConfigureGasTownSession(sessionName, theme, rigName, agentRole, agentRole)
-	}
+	d.applySessionTheme(sessionName, parsed)
 
-	// Send startup command
+	// Get and send startup command
+	startCmd := d.getStartCommand(config, parsed)
 	if err := d.tmux.SendKeys(sessionName, startCmd); err != nil {
 		return fmt.Errorf("sending startup command: %w", err)
 	}
@@ -356,6 +367,102 @@ func (d *Daemon) restartSession(sessionName, identity string) error {
 	// Injecting it via SendKeysDelayed causes rogue text to appear in the terminal.
 
 	return nil
+}
+
+// getWorkDir determines the working directory for an agent.
+// Uses role bead config if available, falls back to hardcoded defaults.
+func (d *Daemon) getWorkDir(config *beads.RoleConfig, parsed *ParsedIdentity) string {
+	// If role bead has work_dir_pattern, use it
+	if config != nil && config.WorkDirPattern != "" {
+		return beads.ExpandRolePattern(config.WorkDirPattern, d.config.TownRoot, parsed.RigName, parsed.AgentName, parsed.RoleType)
+	}
+
+	// Fallback: use default patterns based on role type
+	switch parsed.RoleType {
+	case "mayor":
+		return d.config.TownRoot
+	case "deacon":
+		return d.config.TownRoot
+	case "witness":
+		return filepath.Join(d.config.TownRoot, parsed.RigName)
+	case "refinery":
+		return filepath.Join(d.config.TownRoot, parsed.RigName, "refinery", "rig")
+	case "crew":
+		return filepath.Join(d.config.TownRoot, parsed.RigName, "crew", parsed.AgentName)
+	case "polecat":
+		return filepath.Join(d.config.TownRoot, parsed.RigName, "polecats", parsed.AgentName)
+	default:
+		return ""
+	}
+}
+
+// getNeedsPreSync determines if a workspace needs git sync before starting.
+// Uses role bead config if available, falls back to hardcoded defaults.
+func (d *Daemon) getNeedsPreSync(config *beads.RoleConfig, parsed *ParsedIdentity) bool {
+	// If role bead has explicit config, use it
+	if config != nil {
+		return config.NeedsPreSync
+	}
+
+	// Fallback: roles with persistent git clones need pre-sync
+	switch parsed.RoleType {
+	case "refinery", "crew", "polecat":
+		return true
+	default:
+		return false
+	}
+}
+
+// getStartCommand determines the startup command for an agent.
+// Uses role bead config if available, falls back to hardcoded defaults.
+func (d *Daemon) getStartCommand(config *beads.RoleConfig, parsed *ParsedIdentity) string {
+	// If role bead has explicit config, use it
+	if config != nil && config.StartCommand != "" {
+		// Expand any patterns in the command
+		return beads.ExpandRolePattern(config.StartCommand, d.config.TownRoot, parsed.RigName, parsed.AgentName, parsed.RoleType)
+	}
+
+	// Default command for all agents
+	defaultCmd := "exec claude --dangerously-skip-permissions"
+
+	// Polecats need environment variables set in the command
+	if parsed.RoleType == "polecat" {
+		bdActor := fmt.Sprintf("%s/polecats/%s", parsed.RigName, parsed.AgentName)
+		return fmt.Sprintf("export GT_ROLE=polecat GT_RIG=%s GT_POLECAT=%s BD_ACTOR=%s && %s",
+			parsed.RigName, parsed.AgentName, bdActor, defaultCmd)
+	}
+
+	return defaultCmd
+}
+
+// setSessionEnvironment sets environment variables for the tmux session.
+// Uses role bead config if available, falls back to hardcoded defaults.
+func (d *Daemon) setSessionEnvironment(sessionName, identity string, config *beads.RoleConfig, parsed *ParsedIdentity) {
+	// Always set GT_ROLE
+	_ = d.tmux.SetEnvironment(sessionName, "GT_ROLE", identity)
+
+	// BD_ACTOR uses slashes instead of dashes for path-like identity
+	bdActor := identityToBDActor(identity)
+	_ = d.tmux.SetEnvironment(sessionName, "BD_ACTOR", bdActor)
+
+	// Set any custom env vars from role config
+	if config != nil {
+		for k, v := range config.EnvVars {
+			expanded := beads.ExpandRolePattern(v, d.config.TownRoot, parsed.RigName, parsed.AgentName, parsed.RoleType)
+			_ = d.tmux.SetEnvironment(sessionName, k, expanded)
+		}
+	}
+}
+
+// applySessionTheme applies tmux theming to the session.
+func (d *Daemon) applySessionTheme(sessionName string, parsed *ParsedIdentity) {
+	if parsed.RoleType == "mayor" {
+		theme := tmux.MayorTheme()
+		_ = d.tmux.ConfigureGasTownSession(sessionName, theme, "", "Mayor", "coordinator")
+	} else if parsed.RigName != "" {
+		theme := tmux.AssignTheme(parsed.RigName)
+		_ = d.tmux.ConfigureGasTownSession(sessionName, theme, parsed.RigName, parsed.RoleType, parsed.RoleType)
+	}
 }
 
 // syncWorkspace syncs a git workspace before starting a new session.
@@ -480,50 +587,32 @@ func (d *Daemon) clearAgentRequestingState(identity string, action LifecycleActi
 }
 
 // identityToStateFile maps an agent identity to its state.json file path.
+// Uses parseIdentity to extract components, then derives state file location.
 func (d *Daemon) identityToStateFile(identity string) string {
-	switch identity {
+	parsed, err := parseIdentity(identity)
+	if err != nil {
+		return ""
+	}
+
+	// Derive state file path based on working directory
+	workDir := d.getWorkDir(nil, parsed) // Use defaults, not role bead config
+	if workDir == "" {
+		return ""
+	}
+
+	// For mayor and deacon, state file is in a subdirectory
+	switch parsed.RoleType {
 	case "mayor":
 		return filepath.Join(d.config.TownRoot, "mayor", "state.json")
+	case "deacon":
+		return filepath.Join(d.config.TownRoot, "deacon", "state.json")
+	case "witness":
+		return filepath.Join(d.config.TownRoot, parsed.RigName, "witness", "state.json")
+	case "refinery":
+		return filepath.Join(d.config.TownRoot, parsed.RigName, "refinery", "state.json")
 	default:
-		// Pattern: <rig>-witness → <townRoot>/<rig>/witness/state.json
-		if strings.HasSuffix(identity, "-witness") {
-			rigName := strings.TrimSuffix(identity, "-witness")
-			return filepath.Join(d.config.TownRoot, rigName, "witness", "state.json")
-		}
-		// Pattern: <rig>-refinery → <townRoot>/<rig>/refinery/state.json
-		if strings.HasSuffix(identity, "-refinery") {
-			rigName := strings.TrimSuffix(identity, "-refinery")
-			return filepath.Join(d.config.TownRoot, rigName, "refinery", "state.json")
-		}
-		// Pattern: <rig>-crew-<name> → <townRoot>/<rig>/crew/<name>/state.json
-		if strings.Contains(identity, "-crew-") {
-			parts := strings.SplitN(identity, "-crew-", 2)
-			if len(parts) == 2 {
-				rigName := parts[0]
-				crewName := parts[1]
-				return filepath.Join(d.config.TownRoot, rigName, "crew", crewName, "state.json")
-			}
-		}
-		// Pattern: <rig>-polecat-<name> → <townRoot>/<rig>/polecats/<name>/state.json
-		if strings.Contains(identity, "-polecat-") {
-			parts := strings.SplitN(identity, "-polecat-", 2)
-			if len(parts) == 2 {
-				rigName := parts[0]
-				polecatName := parts[1]
-				return filepath.Join(d.config.TownRoot, rigName, "polecats", polecatName, "state.json")
-			}
-		}
-		// Pattern: <rig>/polecats/<name> → <townRoot>/<rig>/polecats/<name>/state.json
-		if strings.Contains(identity, "/polecats/") {
-			parts := strings.Split(identity, "/polecats/")
-			if len(parts) == 2 {
-				rigName := parts[0]
-				polecatName := parts[1]
-				return filepath.Join(d.config.TownRoot, rigName, "polecats", polecatName, "state.json")
-			}
-		}
-		// Unknown identity - can't determine state file
-		return ""
+		// For crew and polecat, state file is in their working directory
+		return filepath.Join(workDir, "state.json")
 	}
 }
 
@@ -602,52 +691,27 @@ func (d *Daemon) getAgentBeadInfo(agentBeadID string) (*AgentBeadInfo, error) {
 }
 
 // identityToAgentBeadID maps a daemon identity to an agent bead ID.
-// Uses the canonical naming convention: prefix-rig-role-name
-// Examples:
-//   - "deacon" → "gt-deacon"
-//   - "mayor" → "gt-mayor"
-//   - "gastown-witness" → "gt-gastown-witness"
-//   - "gastown-refinery" → "gt-gastown-refinery"
-//   - "gastown-polecat-toast" → "gt-polecat-gastown-toast"
+// Uses parseIdentity to extract components, then uses beads package helpers.
 func (d *Daemon) identityToAgentBeadID(identity string) string {
-	switch identity {
+	parsed, err := parseIdentity(identity)
+	if err != nil {
+		return ""
+	}
+
+	switch parsed.RoleType {
 	case "deacon":
 		return beads.DeaconBeadID()
 	case "mayor":
 		return beads.MayorBeadID()
+	case "witness":
+		return beads.WitnessBeadID(parsed.RigName)
+	case "refinery":
+		return beads.RefineryBeadID(parsed.RigName)
+	case "crew":
+		return beads.CrewBeadID(parsed.RigName, parsed.AgentName)
+	case "polecat":
+		return beads.PolecatBeadID(parsed.RigName, parsed.AgentName)
 	default:
-		// Pattern: <rig>-witness → gt-<rig>-witness
-		if strings.HasSuffix(identity, "-witness") {
-			rigName := strings.TrimSuffix(identity, "-witness")
-			return beads.WitnessBeadID(rigName)
-		}
-		// Pattern: <rig>-refinery → gt-<rig>-refinery
-		if strings.HasSuffix(identity, "-refinery") {
-			rigName := strings.TrimSuffix(identity, "-refinery")
-			return beads.RefineryBeadID(rigName)
-		}
-		// Pattern: <rig>-crew-<name> → gt-<rig>-crew-<name>
-		if strings.Contains(identity, "-crew-") {
-			parts := strings.SplitN(identity, "-crew-", 2)
-			if len(parts) == 2 {
-				return beads.CrewBeadID(parts[0], parts[1])
-			}
-		}
-		// Pattern: <rig>-polecat-<name> → gt-polecat-<rig>-<name>
-		if strings.Contains(identity, "-polecat-") {
-			parts := strings.SplitN(identity, "-polecat-", 2)
-			if len(parts) == 2 {
-				return beads.PolecatBeadID(parts[0], parts[1])
-			}
-		}
-		// Pattern: <rig>/polecats/<name> → gt-polecat-<rig>-<name>
-		if strings.Contains(identity, "/polecats/") {
-			parts := strings.Split(identity, "/polecats/")
-			if len(parts) == 2 {
-				return beads.PolecatBeadID(parts[0], parts[1])
-			}
-		}
-		// Unknown format
 		return ""
 	}
 }
@@ -740,47 +804,32 @@ func (d *Daemon) markAgentDead(agentBeadID string) error {
 	return nil
 }
 
-// identityToBDActor converts a daemon identity (with dashes) to BD_ACTOR format (with slashes).
-// Examples:
-//   - "mayor" → "mayor"
-//   - "gastown-witness" → "gastown/witness"
-//   - "gastown-refinery" → "gastown/refinery"
-//   - "gastown-crew-max" → "gastown/crew/max"
-//   - "gastown-polecat-toast" → "gastown/polecats/toast"
+// identityToBDActor converts a daemon identity to BD_ACTOR format (with slashes).
+// Uses parseIdentity to extract components, then builds the slash format.
 func identityToBDActor(identity string) string {
-	switch identity {
-	case "mayor", "deacon":
+	// Handle already-slash-formatted identities
+	if strings.Contains(identity, "/polecats/") || strings.Contains(identity, "/crew/") ||
+		strings.Contains(identity, "/witness") || strings.Contains(identity, "/refinery") {
 		return identity
+	}
+
+	parsed, err := parseIdentity(identity)
+	if err != nil {
+		return identity // Unknown format - return as-is
+	}
+
+	switch parsed.RoleType {
+	case "mayor", "deacon":
+		return parsed.RoleType
+	case "witness":
+		return parsed.RigName + "/witness"
+	case "refinery":
+		return parsed.RigName + "/refinery"
+	case "crew":
+		return parsed.RigName + "/crew/" + parsed.AgentName
+	case "polecat":
+		return parsed.RigName + "/polecats/" + parsed.AgentName
 	default:
-		// Pattern: <rig>-witness → <rig>/witness
-		if strings.HasSuffix(identity, "-witness") {
-			rigName := strings.TrimSuffix(identity, "-witness")
-			return rigName + "/witness"
-		}
-		// Pattern: <rig>-refinery → <rig>/refinery
-		if strings.HasSuffix(identity, "-refinery") {
-			rigName := strings.TrimSuffix(identity, "-refinery")
-			return rigName + "/refinery"
-		}
-		// Pattern: <rig>-crew-<name> → <rig>/crew/<name>
-		if strings.Contains(identity, "-crew-") {
-			parts := strings.SplitN(identity, "-crew-", 2)
-			if len(parts) == 2 {
-				return parts[0] + "/crew/" + parts[1]
-			}
-		}
-		// Pattern: <rig>-polecat-<name> → <rig>/polecats/<name>
-		if strings.Contains(identity, "-polecat-") {
-			parts := strings.SplitN(identity, "-polecat-", 2)
-			if len(parts) == 2 {
-				return parts[0] + "/polecats/" + parts[1]
-			}
-		}
-		// Identity already in slash format - return as-is
-		if strings.Contains(identity, "/polecats/") {
-			return identity
-		}
-		// Unknown format - return as-is
 		return identity
 	}
 }

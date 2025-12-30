@@ -333,3 +333,125 @@ func SetMRFields(issue *Issue, fields *MRFields) string {
 
 	return formatted + "\n\n" + strings.Join(otherLines, "\n")
 }
+
+// RoleConfig holds structured lifecycle configuration for role beads.
+// These fields are stored as "key: value" lines in the role bead description.
+// This enables agents to self-register their lifecycle configuration,
+// replacing hardcoded identity string parsing in the daemon.
+type RoleConfig struct {
+	// SessionPattern defines how to derive tmux session name.
+	// Supports placeholders: {rig}, {name}, {role}
+	// Examples: "gt-mayor", "gt-{rig}-{role}", "gt-{rig}-{name}"
+	SessionPattern string
+
+	// WorkDirPattern defines the working directory relative to town root.
+	// Supports placeholders: {town}, {rig}, {name}, {role}
+	// Examples: "{town}", "{town}/{rig}", "{town}/{rig}/polecats/{name}"
+	WorkDirPattern string
+
+	// NeedsPreSync indicates whether workspace needs git sync before starting.
+	// True for agents with persistent clones (refinery, crew, polecat).
+	NeedsPreSync bool
+
+	// StartCommand is the command to run after creating the session.
+	// Default: "exec claude --dangerously-skip-permissions"
+	StartCommand string
+
+	// EnvVars are additional environment variables to set in the session.
+	// Stored as "key=value" pairs.
+	EnvVars map[string]string
+}
+
+// ParseRoleConfig extracts RoleConfig from a role bead's description.
+// Fields are expected as "key: value" lines. Returns nil if no config found.
+func ParseRoleConfig(description string) *RoleConfig {
+	config := &RoleConfig{
+		EnvVars: make(map[string]string),
+	}
+	hasFields := false
+
+	for _, line := range strings.Split(description, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		colonIdx := strings.Index(line, ":")
+		if colonIdx == -1 {
+			continue
+		}
+
+		key := strings.TrimSpace(line[:colonIdx])
+		value := strings.TrimSpace(line[colonIdx+1:])
+		if value == "" || value == "null" {
+			continue
+		}
+
+		switch strings.ToLower(key) {
+		case "session_pattern", "session-pattern", "sessionpattern":
+			config.SessionPattern = value
+			hasFields = true
+		case "work_dir_pattern", "work-dir-pattern", "workdirpattern", "workdir_pattern":
+			config.WorkDirPattern = value
+			hasFields = true
+		case "needs_pre_sync", "needs-pre-sync", "needspresync":
+			config.NeedsPreSync = strings.ToLower(value) == "true"
+			hasFields = true
+		case "start_command", "start-command", "startcommand":
+			config.StartCommand = value
+			hasFields = true
+		case "env_var", "env-var", "envvar":
+			// Format: "env_var: KEY=VALUE"
+			if eqIdx := strings.Index(value, "="); eqIdx != -1 {
+				envKey := strings.TrimSpace(value[:eqIdx])
+				envVal := strings.TrimSpace(value[eqIdx+1:])
+				config.EnvVars[envKey] = envVal
+				hasFields = true
+			}
+		}
+	}
+
+	if !hasFields {
+		return nil
+	}
+	return config
+}
+
+// FormatRoleConfig formats RoleConfig as a string suitable for a role bead description.
+// Only non-empty/non-default fields are included.
+func FormatRoleConfig(config *RoleConfig) string {
+	if config == nil {
+		return ""
+	}
+
+	var lines []string
+
+	if config.SessionPattern != "" {
+		lines = append(lines, "session_pattern: "+config.SessionPattern)
+	}
+	if config.WorkDirPattern != "" {
+		lines = append(lines, "work_dir_pattern: "+config.WorkDirPattern)
+	}
+	if config.NeedsPreSync {
+		lines = append(lines, "needs_pre_sync: true")
+	}
+	if config.StartCommand != "" {
+		lines = append(lines, "start_command: "+config.StartCommand)
+	}
+	for k, v := range config.EnvVars {
+		lines = append(lines, "env_var: "+k+"="+v)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// ExpandRolePattern expands placeholders in a pattern string.
+// Supported placeholders: {town}, {rig}, {name}, {role}
+func ExpandRolePattern(pattern, townRoot, rig, name, role string) string {
+	result := pattern
+	result = strings.ReplaceAll(result, "{town}", townRoot)
+	result = strings.ReplaceAll(result, "{rig}", rig)
+	result = strings.ReplaceAll(result, "{name}", name)
+	result = strings.ReplaceAll(result, "{role}", role)
+	return result
+}
