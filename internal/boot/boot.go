@@ -175,8 +175,13 @@ func (b *Boot) spawnTmux() error {
 		_ = b.tmux.KillSession(SessionName)
 	}
 
-	// Create new session in deacon directory
-	if err := b.tmux.NewSession(SessionName, b.deaconDir); err != nil {
+	// Ensure boot directory exists (it should have CLAUDE.md with Boot context)
+	if err := b.EnsureDir(); err != nil {
+		return fmt.Errorf("ensuring boot dir: %w", err)
+	}
+
+	// Create new session in boot directory (not deacon dir) so Claude reads Boot's CLAUDE.md
+	if err := b.tmux.NewSession(SessionName, b.bootDir); err != nil {
 		return fmt.Errorf("creating boot session: %w", err)
 	}
 
@@ -184,8 +189,9 @@ func (b *Boot) spawnTmux() error {
 	_ = b.tmux.SetEnvironment(SessionName, "GT_ROLE", "boot")
 	_ = b.tmux.SetEnvironment(SessionName, "BD_ACTOR", "deacon-boot")
 
-	// Launch Claude with environment exported inline
-	startCmd := "export GT_ROLE=boot BD_ACTOR=deacon-boot && claude --dangerously-skip-permissions"
+	// Launch Claude with environment exported inline and initial triage prompt
+	// The "gt boot triage" prompt tells Boot to immediately start triage (GUPP principle)
+	startCmd := `export GT_ROLE=boot BD_ACTOR=deacon-boot && claude --dangerously-skip-permissions "gt boot triage"`
 	if err := b.tmux.SendKeys(SessionName, startCmd); err != nil {
 		return fmt.Errorf("sending startup command: %w", err)
 	}
