@@ -269,7 +269,7 @@ type RuntimeSessionConfig struct {
 
 // RuntimeHooksConfig configures runtime hook installation.
 type RuntimeHooksConfig struct {
-	// Provider controls which hook templates to install: "claude" or "none".
+	// Provider controls which hook templates to install: "claude", "opencode", or "none".
 	Provider string `json:"provider,omitempty"`
 
 	// Dir is the settings directory (e.g., ".claude").
@@ -435,6 +435,8 @@ func defaultRuntimeCommand(provider string) string {
 	switch provider {
 	case "codex":
 		return "codex"
+	case "opencode":
+		return "opencode"
 	case "generic":
 		return ""
 	default:
@@ -454,6 +456,8 @@ func defaultRuntimeArgs(provider string) []string {
 func defaultPromptMode(provider string) string {
 	switch provider {
 	case "codex":
+		return "none"
+	case "opencode":
 		return "none"
 	default:
 		return "arg"
@@ -475,24 +479,36 @@ func defaultConfigDirEnv(provider string) string {
 }
 
 func defaultHooksProvider(provider string) string {
-	if provider == "claude" {
+	switch provider {
+	case "claude":
 		return "claude"
+	case "opencode":
+		return "opencode"
+	default:
+		return "none"
 	}
-	return "none"
 }
 
 func defaultHooksDir(provider string) string {
-	if provider == "claude" {
+	switch provider {
+	case "claude":
 		return ".claude"
+	case "opencode":
+		return ".opencode/plugin"
+	default:
+		return ""
 	}
-	return ""
 }
 
 func defaultHooksFile(provider string) string {
-	if provider == "claude" {
+	switch provider {
+	case "claude":
 		return "settings.json"
+	case "opencode":
+		return "gastown.js"
+	default:
+		return ""
 	}
-	return ""
 }
 
 func defaultProcessNames(provider, command string) []string {
@@ -524,6 +540,9 @@ func defaultReadyDelayMs(provider string) int {
 
 func defaultInstructionsFile(provider string) string {
 	if provider == "codex" {
+		return "AGENTS.md"
+	}
+	if provider == "opencode" {
 		return "AGENTS.md"
 	}
 	return "CLAUDE.md"

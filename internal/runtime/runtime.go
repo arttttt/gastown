@@ -8,6 +8,7 @@ import (
 
 	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
+	"github.com/steveyegge/gastown/internal/opencode"
 	"github.com/steveyegge/gastown/internal/tmux"
 )
 
@@ -24,6 +25,8 @@ func EnsureSettingsForRole(workDir, role string, rc *config.RuntimeConfig) error
 	switch rc.Hooks.Provider {
 	case "claude":
 		return claude.EnsureSettingsForRoleAt(workDir, role, rc.Hooks.Dir, rc.Hooks.SettingsFile)
+	case "opencode":
+		return opencode.EnsurePluginAt(workDir, rc.Hooks.Dir, rc.Hooks.SettingsFile)
 	default:
 		return nil
 	}
@@ -56,7 +59,7 @@ func StartupFallbackCommands(role string, rc *config.RuntimeConfig) []string {
 	if rc == nil {
 		rc = config.DefaultRuntimeConfig()
 	}
-	if rc.Hooks != nil && rc.Hooks.Provider == "claude" {
+	if rc.Hooks != nil && rc.Hooks.Provider != "" && rc.Hooks.Provider != "none" {
 		return nil
 	}
 

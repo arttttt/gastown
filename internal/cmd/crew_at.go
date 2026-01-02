@@ -7,6 +7,7 @@ import (
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/crew"
+	"github.com/steveyegge/gastown/internal/runtime"
 	"github.com/steveyegge/gastown/internal/style"
 	"github.com/steveyegge/gastown/internal/tmux"
 	"github.com/steveyegge/gastown/internal/workspace"
@@ -88,6 +89,7 @@ func runCrewAt(cmd *cobra.Command, args []string) error {
 	}
 
 	runtimeConfig := config.LoadRuntimeConfig(r.Path)
+	_ = runtime.EnsureSettingsForRole(worker.ClonePath, "crew", runtimeConfig)
 
 	// Check if session exists
 	t := tmux.NewTmux()
