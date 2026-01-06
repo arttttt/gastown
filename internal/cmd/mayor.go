@@ -3,6 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -126,9 +128,16 @@ func startMayorSession(t *tmux.Tmux, sessionName, agentOverride string) error {
 		return fmt.Errorf("not in a Gas Town workspace: %w", err)
 	}
 
-	// Create session in workspace root
+	// Mayor runs in mayor/ subdirectory to keep its files (CLAUDE.md, settings)
+	// separate from child agents that inherit the working directory
+	mayorDir := filepath.Join(townRoot, "mayor")
+	if err := os.MkdirAll(mayorDir, 0755); err != nil {
+		return fmt.Errorf("creating mayor directory: %w", err)
+	}
+
+	// Create session in mayor directory
 	fmt.Println("Starting Mayor session...")
-	if err := t.NewSession(sessionName, townRoot); err != nil {
+	if err := t.NewSession(sessionName, mayorDir); err != nil {
 		return fmt.Errorf("creating session: %w", err)
 	}
 
@@ -170,7 +179,7 @@ func startMayorSession(t *tmux.Tmux, sessionName, agentOverride string) error {
 	// Send the propulsion nudge to trigger autonomous coordination.
 	// Wait for beacon to be fully processed (needs to be separate prompt)
 	time.Sleep(2 * time.Second)
-	_ = t.NudgeSession(sessionName, session.PropulsionNudgeForRole("mayor", townRoot)) // Non-fatal
+	_ = t.NudgeSession(sessionName, session.PropulsionNudgeForRole("mayor", mayorDir)) // Non-fatal
 
 	return nil
 }

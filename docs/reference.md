@@ -204,6 +204,88 @@ gt mol step done <step>      # Complete a molecule step
 | `GT_RIG` | Rig name for rig-level agents |
 | `GT_POLECAT` | Polecat name (for polecats only) |
 
+## Agent Working Directories and Settings
+
+Each agent runs in a specific working directory and has its own Claude settings.
+Understanding this hierarchy is essential for proper configuration.
+
+### Working Directories by Role
+
+| Role | Working Directory | Notes |
+|------|-------------------|-------|
+| **Mayor** | `~/gt/mayor/` | Isolated from child agents |
+| **Deacon** | `~/gt/deacon/` | Background supervisor |
+| **Witness** | `~/gt/<rig>/witness/` | No git clone, monitors only |
+| **Refinery** | `~/gt/<rig>/refinery/rig/` | Worktree on main branch |
+| **Crew** | `~/gt/<rig>/crew/<name>/rig/` | Persistent clone |
+| **Polecat** | `~/gt/<rig>/polecats/<name>/rig/` | Ephemeral worktree |
+
+### Settings File Locations
+
+Claude Code searches for `.claude/settings.json` starting from the working
+directory and traversing upward. Each agent has settings at its working directory:
+
+```
+~/gt/
+├── mayor/.claude/settings.json          # Mayor settings
+├── deacon/.claude/settings.json         # Deacon settings
+└── <rig>/
+    ├── witness/.claude/settings.json    # Witness settings
+    ├── refinery/rig/.claude/settings.json
+    ├── crew/<name>/rig/.claude/settings.json
+    └── polecats/<name>/rig/.claude/settings.json
+```
+
+**Why this structure?** Child agents inherit the parent's working directory
+when spawned. By keeping each role's files in separate directories, we prevent
+the mayor's CLAUDE.md or settings from affecting polecat behavior.
+
+### Sparse Checkout (Source Repo Isolation)
+
+When agents work on source repositories that have their own `.claude/` directory,
+Gas Town uses git sparse checkout to exclude it:
+
+```bash
+# Automatically configured for worktrees
+git sparse-checkout set --no-cone '/*' '!/.claude/'
+```
+
+This ensures the agent uses Gas Town's settings, not the source repo's.
+
+**Doctor check**: `gt doctor` verifies sparse checkout is configured correctly.
+
+### Settings Inheritance
+
+Claude Code's settings search order (first match wins):
+
+1. `.claude/settings.json` in current working directory
+2. `.claude/settings.json` in parent directories (traversing up)
+3. `~/.claude/settings.json` (user global settings)
+
+Gas Town places settings at each agent's working directory root, so agents
+find their role-specific settings before reaching any parent or global config.
+
+### Settings Templates
+
+Gas Town uses two settings templates based on role type:
+
+| Type | Roles | Key Difference |
+|------|-------|----------------|
+| **Interactive** | Mayor, Crew | Mail injected on `UserPromptSubmit` hook |
+| **Autonomous** | Polecat, Witness, Refinery, Deacon | Mail injected on `SessionStart` hook |
+
+Autonomous agents may start without user input, so they need mail checked
+at session start. Interactive agents wait for user prompts.
+
+### Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Agent using wrong settings | Check `gt doctor`, verify sparse checkout |
+| Settings not found | Ensure `.claude/settings.json` exists at role home |
+| Source repo settings leaking | Run `gt doctor --fix` to configure sparse checkout |
+| Mayor settings affecting polecats | Mayor should run in `mayor/`, not town root |
+
 ## CLI Reference
 
 ### Town Management

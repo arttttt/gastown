@@ -147,7 +147,10 @@ func runPrime(cmd *cobra.Command, args []string) error {
 	}
 
 	// Ensure beads redirect exists for worktree-based roles
-	ensureBeadsRedirect(ctx)
+	// Skip if there's a role/location mismatch to avoid creating bad redirects
+	if !roleInfo.Mismatch {
+		ensureBeadsRedirect(ctx)
+	}
 
 	// NOTE: reportAgentState("running") removed (gt-zecmc)
 	// Agent liveness is observable from tmux - no need to record it in bead.
