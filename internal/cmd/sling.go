@@ -405,11 +405,15 @@ func runSling(cmd *cobra.Command, args []string) error {
 	}
 
 	// Hook the bead using bd update
-	// Set BEADS_DIR to town-level beads so hq-* beads are accessible
-	// even when running from polecat worktree (which only sees gt-* via redirect)
+	// For town-level beads (hq-*), set BEADS_DIR to town beads
+	// For rig-level beads (gt-*, bd-*, etc.), use redirect-based routing from hookWorkDir
 	hookCmd := exec.Command("bd", "--no-daemon", "update", beadID, "--status=hooked", "--assignee="+targetAgent)
-	hookCmd.Env = append(os.Environ(), "BEADS_DIR="+townBeadsDir)
-	if hookWorkDir != "" {
+	if strings.HasPrefix(beadID, "hq-") {
+		// Town-level bead: set BEADS_DIR explicitly
+		hookCmd.Env = append(os.Environ(), "BEADS_DIR="+townBeadsDir)
+		hookCmd.Dir = townRoot
+	} else if hookWorkDir != "" {
+		// Rig-level bead: use redirect from polecat's worktree
 		hookCmd.Dir = hookWorkDir
 	} else {
 		hookCmd.Dir = townRoot
@@ -1364,9 +1368,14 @@ func runBatchSling(beadIDs []string, rigName string, townBeadsDir string) error 
 		}
 
 		// Hook the bead
+		// For town-level beads (hq-*), set BEADS_DIR; for rig-level beads use redirect
 		hookCmd := exec.Command("bd", "--no-daemon", "update", beadID, "--status=hooked", "--assignee="+targetAgent)
-		hookCmd.Env = append(os.Environ(), "BEADS_DIR="+townBeadsDir)
-		if hookWorkDir != "" {
+		if strings.HasPrefix(beadID, "hq-") {
+			// Town-level bead: set BEADS_DIR and run from town root (parent of townBeadsDir)
+			hookCmd.Env = append(os.Environ(), "BEADS_DIR="+townBeadsDir)
+			hookCmd.Dir = filepath.Dir(townBeadsDir)
+		} else if hookWorkDir != "" {
+			// Rig-level bead: use redirect from polecat's worktree
 			hookCmd.Dir = hookWorkDir
 		}
 		hookCmd.Stderr = os.Stderr
