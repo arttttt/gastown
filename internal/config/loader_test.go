@@ -831,6 +831,20 @@ func TestRuntimeConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestRuntimeConfigProviderInference(t *testing.T) {
+	t.Parallel()
+	rc := normalizeRuntimeConfig(&RuntimeConfig{Command: "opencode"})
+	if rc.Provider != "opencode" {
+		t.Errorf("Provider = %q, want %q", rc.Provider, "opencode")
+	}
+	if rc.Hooks == nil || rc.Hooks.Provider != "opencode" {
+		t.Errorf("Hooks.Provider = %q, want %q", rc.Hooks.Provider, "opencode")
+	}
+	if rc.PromptMode != "none" {
+		t.Errorf("PromptMode = %q, want %q", rc.PromptMode, "none")
+	}
+}
+
 func TestRuntimeConfigBuildCommand(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
