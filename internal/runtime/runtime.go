@@ -18,8 +18,32 @@ func EnsureSettingsForRole(workDir, role string, rc *config.RuntimeConfig) error
 		rc = config.DefaultRuntimeConfig()
 	}
 
+	// If Hooks not set, fill defaults based on Provider
 	if rc.Hooks == nil {
-		return nil
+		rc.Hooks = &config.RuntimeHooksConfig{}
+		if rc.Hooks.Provider == "" {
+			rc.Hooks.Provider = rc.Provider
+		}
+		if rc.Hooks.Dir == "" {
+			switch rc.Provider {
+			case "claude":
+				rc.Hooks.Dir = ".claude"
+			case "opencode":
+				rc.Hooks.Dir = ".opencode/plugin"
+			default:
+				rc.Hooks.Dir = ""
+			}
+		}
+		if rc.Hooks.SettingsFile == "" {
+			switch rc.Provider {
+			case "claude":
+				rc.Hooks.SettingsFile = "settings.json"
+			case "opencode":
+				rc.Hooks.SettingsFile = "gastown.js"
+			default:
+				rc.Hooks.SettingsFile = ""
+			}
+		}
 	}
 
 	switch rc.Hooks.Provider {
