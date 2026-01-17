@@ -103,8 +103,8 @@ func TestIsKnownPreset(t *testing.T) {
 		{"cursor", true},
 		{"auggie", true},
 		{"amp", true},
-		{"opencode", true},  // Now built-in
-		{"aider", false},    // Not built-in, can be added via config
+		{"opencode", true}, // Now built-in
+		{"aider", false},   // Not built-in, can be added via config
 		{"unknown", false},
 		{"chatgpt", false},
 	}
@@ -336,10 +336,10 @@ func TestGetSessionIDEnvVar(t *testing.T) {
 	}{
 		{"claude", "CLAUDE_SESSION_ID"},
 		{"gemini", "GEMINI_SESSION_ID"},
-		{"codex", ""},    // Codex uses JSONL output instead
-		{"cursor", ""},   // Cursor uses --resume with chatId directly
-		{"auggie", ""},   // Auggie uses --resume directly
-		{"amp", ""},      // AMP uses 'threads continue' subcommand
+		{"codex", ""},  // Codex uses JSONL output instead
+		{"cursor", ""}, // Cursor uses --resume with chatId directly
+		{"auggie", ""}, // Auggie uses --resume directly
+		{"amp", ""},    // AMP uses 'threads continue' subcommand
 		{"unknown", ""},
 	}
 
@@ -678,6 +678,24 @@ func TestLoadRigAgentRegistry(t *testing.T) {
 
 		if err := LoadRigAgentRegistry(invalidRegistryPath); err == nil {
 			t.Errorf("LoadRigAgentRegistry(%s) should error for invalid JSON: got nil", invalidRegistryPath)
+		}
+	})
+}
+
+func TestRuntimeConfigFromPreset_FillsHooks(t *testing.T) {
+	t.Parallel()
+	t.Run("opencode preset", func(t *testing.T) {
+		rc := RuntimeConfigFromPreset(AgentOpenCode)
+
+		// Should have hooks filled by normalizeRuntimeConfig
+		if rc.Hooks == nil || rc.Hooks.Provider != "opencode" {
+			t.Errorf("Hooks.Provider = %q, want 'opencode'", rc.Hooks.Provider)
+		}
+		if rc.Hooks == nil || rc.Hooks.Dir != ".opencode/plugin" {
+			t.Errorf("Hooks.Dir = %q, want '.opencode/plugin'", rc.Hooks.Dir)
+		}
+		if rc.Hooks == nil || rc.Hooks.SettingsFile != "gastown.js" {
+			t.Errorf("Hooks.SettingsFile = %q, want 'gastown.js'", rc.Hooks.SettingsFile)
 		}
 	})
 }
