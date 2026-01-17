@@ -132,7 +132,7 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 		Command:             "codex",
 		Args:                []string{"--yolo"},
 		ProcessNames:        []string{"codex"}, // Codex CLI binary
-		SessionIDEnv:        "", // Codex captures from JSONL output
+		SessionIDEnv:        "",                // Codex captures from JSONL output
 		ResumeFlag:          "resume",
 		ResumeStyle:         "subcommand",
 		SupportsHooks:       false, // Use env/files instead
@@ -182,7 +182,7 @@ var builtinPresets = map[AgentPreset]*AgentPresetInfo{
 	AgentOpenCode: {
 		Name:                AgentOpenCode,
 		Command:             "opencode",
-		Args:                []string{}, // OpenCode handles permissions internally
+		Args:                []string{},                  // OpenCode handles permissions internally
 		ProcessNames:        []string{"opencode", "bun"}, // Runs via Bun runtime
 		SessionIDEnv:        "OPENCODE_SESSION_ID",
 		ResumeFlag:          "-c", // --continue flag
@@ -344,10 +344,10 @@ func RuntimeConfigFromPreset(preset AgentPreset) *RuntimeConfig {
 		return DefaultRuntimeConfig()
 	}
 
-	return &RuntimeConfig{
+	return normalizeRuntimeConfig(&RuntimeConfig{
 		Command: info.Command,
 		Args:    append([]string(nil), info.Args...), // Copy to avoid mutation
-	}
+	})
 }
 
 // BuildResumeCommand builds a command to resume an agent session.
