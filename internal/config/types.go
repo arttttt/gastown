@@ -390,6 +390,9 @@ func normalizeRuntimeConfig(rc *RuntimeConfig) *RuntimeConfig {
 	}
 
 	if rc.Provider == "" {
+		rc.Provider = inferProviderFromCommand(rc.Command)
+	}
+	if rc.Provider == "" {
 		rc.Provider = "claude"
 	}
 
@@ -458,6 +461,19 @@ func normalizeRuntimeConfig(rc *RuntimeConfig) *RuntimeConfig {
 	}
 
 	return rc
+}
+
+func inferProviderFromCommand(command string) string {
+	if command == "" {
+		return ""
+	}
+	base := strings.ToLower(filepath.Base(strings.TrimSpace(command)))
+	switch base {
+	case "claude", "codex", "gemini", "cursor", "auggie", "amp", "opencode":
+		return base
+	default:
+		return ""
+	}
 }
 
 func defaultRuntimeCommand(provider string) string {
