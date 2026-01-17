@@ -1091,7 +1091,7 @@ func fillRuntimeDefaults(rc *RuntimeConfig) *RuntimeConfig {
 	if result.Args == nil {
 		result.Args = []string{"--dangerously-skip-permissions"}
 	}
-	return result
+	return normalizeRuntimeConfig(result)
 }
 
 // GetRuntimeCommand is a convenience function that returns the full command string
