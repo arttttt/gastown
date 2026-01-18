@@ -175,10 +175,10 @@ func (m *SessionManager) Start(polecat string, opts SessionStartOptions) error {
 	townRoot := filepath.Dir(m.rig.Path)
 	runtimeConfig := config.ResolveAgentConfig(townRoot, m.rig.Path)
 
-	// Ensure runtime settings exist in polecats/ (not polecats/<name>/) so we don't
-	// write into the source repo. Runtime walks up to tree to find settings.
-	polecatsDir := filepath.Join(m.rig.Path, "polecats")
-	if err := runtime.EnsureSettingsForRole(polecatsDir, "polecat", runtimeConfig); err != nil {
+	// Ensure runtime settings exist in workDir where session runs.
+	// OpenCode looks for plugins relative to the working directory, not by directory traversal.
+	// Note: .opencode/ should be in .gitignore to avoid committing to source repo.
+	if err := runtime.EnsureSettingsForRole(workDir, "polecat", runtimeConfig); err != nil {
 		return fmt.Errorf("ensuring runtime settings: %w", err)
 	}
 

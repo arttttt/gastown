@@ -169,10 +169,10 @@ func (m *Manager) Start(foreground bool, agentOverride string) error {
 	townRoot := filepath.Dir(m.rig.Path)
 	runtimeConfig := config.ResolveAgentConfig(townRoot, m.rig.Path)
 
-	// Ensure runtime settings exist in refinery/ (not refinery/rig/) so we don't
-	// write into the source repo. Runtime walks up to tree to find settings.
-	refineryParentDir := filepath.Join(m.rig.Path, "refinery")
-	if err := runtime.EnsureSettingsForRole(refineryParentDir, "refinery", runtimeConfig); err != nil {
+	// Ensure runtime settings exist in refineryRigDir where session runs.
+	// OpenCode looks for plugins relative to the working directory, not by directory traversal.
+	// Note: .opencode/ should be in .gitignore to avoid committing to source repo.
+	if err := runtime.EnsureSettingsForRole(refineryRigDir, "refinery", runtimeConfig); err != nil {
 		return fmt.Errorf("ensuring runtime settings: %w", err)
 	}
 
