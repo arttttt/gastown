@@ -76,9 +76,9 @@ func (m *Manager) Start(agentOverride string) error {
 	// Resolve runtime config for role-specific agent settings
 	rc := config.ResolveAgentConfig(m.townRoot, mayorDir)
 
-	// Ensure runtime settings exist in mayor/ so we don't write into source repo.
-	// Runtime walks up to tree to find settings.
-	if err := runtime.EnsureSettingsForRole(mayorDir, "mayor", rc); err != nil {
+	// Ensure runtime settings exist in townRoot because Mayor session runs from there.
+	// OpenCode looks for plugins relative to the working directory, not by directory traversal.
+	if err := runtime.EnsureSettingsForRole(m.townRoot, "mayor", rc); err != nil {
 		return fmt.Errorf("ensuring runtime settings: %w", err)
 	}
 
