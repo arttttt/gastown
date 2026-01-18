@@ -12,30 +12,22 @@ export const GasTown = async ({ $, directory }) => {
     }
   };
 
-  const onSessionCreated = async () => {
-    if (didInit) return;
-    didInit = true;
-    await run("gt prime");
-    if (autonomousRoles.has(role)) {
-      await run("gt mail check --inject");
-    }
-    await run("gt nudge deacon session-started");
-  };
-
-  const onSessionCompacted = async () => {
-    // Re-inject Gas Town context after compaction
-    await run("gt prime");
-  };
-
   return {
-    event: async ({ event }) => {
-      if (event?.type === "session.created") {
-        await onSessionCreated();
+    "session.created": async (input, output) => {
+      if (didInit) return;
+      didInit = true;
+      await run("gt prime");
+      if (autonomousRoles.has(role)) {
+        await run("gt mail check --inject");
       }
-      if (event?.type === "session.compacted") {
-        await onSessionCompacted();
-      }
+      await run("gt nudge deacon session-started");
     },
+
+    "session.compacted": async (input, output) => {
+      // Re-inject Gas Town context after compaction
+      await run("gt prime");
+    },
+
     // Customize compaction to preserve critical Gas Town context
     "experimental.session.compacting": async ({ sessionID }, output) => {
       const roleDisplay = role || "unknown";
