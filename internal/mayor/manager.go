@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
+	"github.com/steveyegge/gastown/internal/runtime"
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/tmux"
 )
@@ -73,9 +73,13 @@ func (m *Manager) Start(agentOverride string) error {
 		return fmt.Errorf("creating mayor directory: %w", err)
 	}
 
-	// Ensure Claude settings exist
-	if err := claude.EnsureSettingsForRole(mayorDir, "mayor"); err != nil {
-		return fmt.Errorf("ensuring Claude settings: %w", err)
+	// Resolve runtime config for role-specific agent settings
+	rc := config.ResolveAgentConfig(m.townRoot, mayorDir)
+
+	// Ensure runtime settings exist in mayor/ so we don't write into source repo.
+	// Runtime walks up to tree to find settings.
+	if err := runtime.EnsureSettingsForRole(mayorDir, "mayor", rc); err != nil {
+		return fmt.Errorf("ensuring runtime settings: %w", err)
 	}
 
 	// Build startup beacon with explicit instructions (matches gt handoff behavior)
