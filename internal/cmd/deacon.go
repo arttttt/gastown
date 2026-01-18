@@ -376,7 +376,9 @@ func startDeaconSession(t *tmux.Tmux, sessionName, agentOverride string) error {
 	}
 
 	// Ensure Claude settings exist (autonomous role needs mail in SessionStart)
-	if err := runtime.EnsureSettingsForRole(deaconDir, "deacon", config.LoadRuntimeConfig("")); err != nil {
+	// Load town settings to get role-specific agent config (e.g., role_agents["deacon"] = "glm-air")
+	rc := config.ResolveAgentConfig(townRoot, deaconDir)
+	if err := runtime.EnsureSettingsForRole(deaconDir, "deacon", rc); err != nil {
 		return fmt.Errorf("creating deacon settings: %w", err)
 	}
 
