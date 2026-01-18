@@ -62,20 +62,17 @@ func AgentEnv(cfg AgentEnvConfig) map[string]string {
 		env["GT_RIG"] = cfg.Rig
 		env["BD_ACTOR"] = fmt.Sprintf("%s/witness", cfg.Rig)
 		env["GIT_AUTHOR_NAME"] = fmt.Sprintf("%s/witness", cfg.Rig)
-		env["GT_AUTO_INIT"] = "1" // Enable OpenCode plugin auto-init
 
 	case "refinery":
 		env["GT_RIG"] = cfg.Rig
 		env["BD_ACTOR"] = fmt.Sprintf("%s/refinery", cfg.Rig)
 		env["GIT_AUTHOR_NAME"] = fmt.Sprintf("%s/refinery", cfg.Rig)
-		env["GT_AUTO_INIT"] = "1" // Enable OpenCode plugin auto-init
 
 	case "polecat":
 		env["GT_RIG"] = cfg.Rig
 		env["GT_POLECAT"] = cfg.AgentName
 		env["BD_ACTOR"] = fmt.Sprintf("%s/polecats/%s", cfg.Rig, cfg.AgentName)
 		env["GIT_AUTHOR_NAME"] = cfg.AgentName
-		env["GT_AUTO_INIT"] = "1" // Enable OpenCode plugin auto-init
 
 	case "crew":
 		env["GT_RIG"] = cfg.Rig
@@ -212,4 +209,25 @@ func EnvToSlice(env map[string]string) []string {
 		result = append(result, k+"="+v)
 	}
 	return result
+}
+
+// providerEnv returns provider-specific environment variables.
+// This keeps provider-specific logic separate from base agent env.
+func providerEnv(provider, role string) map[string]string {
+	switch provider {
+	case "opencode":
+		return openCodeEnv(role)
+	default:
+		return nil
+	}
+}
+
+// openCodeEnv returns OpenCode-specific environment variables.
+// GT_AUTO_INIT enables the plugin to replace [GT_AGENT_INIT] trigger with context.
+// This applies to ALL roles using OpenCode - the plugin internally handles
+// role-specific behavior (e.g., only autonomous roles get mail checked).
+func openCodeEnv(role string) map[string]string {
+	return map[string]string{
+		"GT_AUTO_INIT": "1",
+	}
 }
