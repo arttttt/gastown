@@ -77,11 +77,11 @@ func configureExistingAgentHooks() int {
 
 	configured := 0
 
-	// Configure mayor hooks
+	// Configure mayor hooks (mayor runs from town root)
 	mayorDir := filepath.Join(townRoot, "mayor")
 	if _, err := os.Stat(mayorDir); err == nil {
 		mayorConfig := config.ResolveAgentConfig(townRoot, mayorDir)
-		if err := runtime.EnsureSettingsForRole(mayorDir, "mayor", mayorConfig); err == nil {
+		if err := runtime.EnsureSettingsForRole(townRoot, "mayor", mayorConfig); err == nil {
 			configured++
 		}
 	}
@@ -117,11 +117,14 @@ func configureExistingAgentHooks() int {
 			}
 		}
 
-		// Configure refinery
-		refineryDir := filepath.Join(rigDir, "refinery")
-		if _, err := os.Stat(refineryDir); err == nil {
-			refineryConfig := config.ResolveAgentConfig(townRoot, refineryDir)
-			if err := runtime.EnsureSettingsForRole(refineryDir, "refinery", refineryConfig); err == nil {
+		// Configure refinery (refinery runs from refinery/rig or mayor/rig)
+		refineryRigDir := filepath.Join(rigDir, "refinery", "rig")
+		if _, err := os.Stat(refineryRigDir); os.IsNotExist(err) {
+			refineryRigDir = filepath.Join(rigDir, "mayor", "rig")
+		}
+		if _, err := os.Stat(refineryRigDir); err == nil {
+			refineryConfig := config.ResolveAgentConfig(townRoot, refineryRigDir)
+			if err := runtime.EnsureSettingsForRole(refineryRigDir, "refinery", refineryConfig); err == nil {
 				configured++
 			}
 		}
