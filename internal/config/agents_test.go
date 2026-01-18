@@ -691,8 +691,8 @@ func TestRuntimeConfigFromPreset_FillsHooks(t *testing.T) {
 		if rc.Hooks == nil || rc.Hooks.Provider != "opencode" {
 			t.Errorf("Hooks.Provider = %q, want 'opencode'", rc.Hooks.Provider)
 		}
-		if rc.Hooks == nil || rc.Hooks.Dir != ".opencode/plugin" {
-			t.Errorf("Hooks.Dir = %q, want '.opencode/plugin'", rc.Hooks.Dir)
+		if rc.Hooks == nil || rc.Hooks.Dir != ".opencode/plugins" {
+			t.Errorf("Hooks.Dir = %q, want '.opencode/plugins'", rc.Hooks.Dir)
 		}
 		if rc.Hooks == nil || rc.Hooks.SettingsFile != "gastown.js" {
 			t.Errorf("Hooks.SettingsFile = %q, want 'gastown.js'", rc.Hooks.SettingsFile)

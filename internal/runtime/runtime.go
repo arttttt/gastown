@@ -29,7 +29,7 @@ func EnsureSettingsForRole(workDir, role string, rc *config.RuntimeConfig) error
 			case "claude":
 				rc.Hooks.Dir = ".claude"
 			case "opencode":
-				rc.Hooks.Dir = ".opencode/plugin"
+				rc.Hooks.Dir = ".opencode/plugins"
 			default:
 				rc.Hooks.Dir = ""
 			}

@@ -157,7 +157,7 @@ func TestEnsurePluginAt_InstallsDependencies(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Use OpenCode-style path structure
-	pluginDir := ".opencode/plugin"
+	pluginDir := ".opencode/plugins"
 	pluginFile := "gastown.js"
 
 	err := EnsurePluginAt(tmpDir, pluginDir, pluginFile)

@@ -539,7 +539,7 @@ func defaultHooksDir(provider string) string {
 	case "claude":
 		return ".claude"
 	case "opencode":
-		return ".opencode/plugin"
+		return ".opencode/plugins"
 	default:
 		return ""
 	}
