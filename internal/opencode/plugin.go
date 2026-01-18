@@ -38,7 +38,7 @@ func EnsurePluginAt(workDir, pluginDir, pluginFile string) error {
 
 	// Create package.json for OpenCode plugin dependencies
 	// OpenCode requires this to load local plugins with TypeScript support
-	pluginRoot := filepath.Join(workDir, pluginDir)
+	pluginRoot := filepath.Join(workDir, filepath.Dir(pluginDir))
 	packageJsonPath := filepath.Join(pluginRoot, "package.json")
 
 	if _, err := os.Stat(packageJsonPath); os.IsNotExist(err) {
