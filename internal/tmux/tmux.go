@@ -1163,8 +1163,68 @@ func (t *Tmux) SetMailClickBinding(session string) error {
 // RespawnPane kills all processes in a pane and starts a new command.
 // This is used for "hot reload" of agent sessions - instantly restart in place.
 // The pane parameter should be a pane ID (e.g., "%0") or session:window.pane format.
+//
+// WARNING: This function uses tmux's built-in -k flag which may not properly kill
+// all processes in complex process trees (like Claude with child shells).
+// For reliable process cleanup, use RespawnPaneWithProcesses instead.
 func (t *Tmux) RespawnPane(pane, command string) error {
 	_, err := t.run("respawn-pane", "-k", "-t", pane, command)
+	return err
+}
+
+// RespawnPaneWithProcesses explicitly kills all processes in a pane before respawning.
+// This is the safe way to restart agent sessions, preventing orphan processes that
+// can survive tmux's built-in respawn-pane -k command.
+//
+// The problem with plain respawn-pane -k:
+// - tmux sends SIGHUP to the pane's process group
+// - Claude Code may have child processes (shells, tools) in different process groups
+// - These children survive and become orphans, consuming resources
+//
+// This function:
+// 1. Gets the pane's main process PID
+// 2. Finds all descendant processes recursively
+// 3. Sends SIGTERM to all descendants (deepest first)
+// 4. Waits 100ms for graceful shutdown
+// 5. Sends SIGKILL to any remaining descendants
+// 6. Respawns the pane with the new command
+//
+// The pane parameter should be a pane ID (e.g., "%0") or session:window.pane format.
+func (t *Tmux) RespawnPaneWithProcesses(pane, command string) error {
+	// Get the pane PID using list-panes with the pane target
+	out, err := t.run("list-panes", "-t", pane, "-F", "#{pane_pid}")
+	if err != nil {
+		// Pane might not exist or be in bad state, try direct respawn
+		return t.RespawnPane(pane, command)
+	}
+	pid := strings.TrimSpace(out)
+
+	if pid != "" {
+		// Get all descendant PIDs recursively (returns deepest-first order)
+		descendants := getAllDescendants(pid)
+
+		// Send SIGTERM to all descendants (deepest first to avoid orphaning)
+		for _, dpid := range descendants {
+			_ = exec.Command("kill", "-TERM", dpid).Run()
+		}
+
+		// Wait for graceful shutdown
+		time.Sleep(100 * time.Millisecond)
+
+		// Send SIGKILL to any remaining descendants
+		for _, dpid := range descendants {
+			_ = exec.Command("kill", "-KILL", dpid).Run()
+		}
+
+		// Kill the pane process itself (may have called setsid() and detached)
+		_ = exec.Command("kill", "-TERM", pid).Run()
+		time.Sleep(100 * time.Millisecond)
+		_ = exec.Command("kill", "-KILL", pid).Run()
+	}
+
+	// Respawn the pane with the new command
+	// The -k flag is still used as a safety net, but we've already killed processes
+	_, err = t.run("respawn-pane", "-k", "-t", pane, command)
 	return err
 }
 
