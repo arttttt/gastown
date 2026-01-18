@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-//go:embed plugin/gastown.js
+//go:embed plugin/gastown.js plugin/package.json
 var pluginFS embed.FS
 
 // EnsurePluginAt ensures the Gas Town OpenCode plugin exists.
@@ -34,6 +34,22 @@ func EnsurePluginAt(workDir, pluginDir, pluginFile string) error {
 
 	if err := os.WriteFile(pluginPath, content, 0644); err != nil {
 		return fmt.Errorf("writing plugin: %w", err)
+	}
+
+	// Create package.json for OpenCode plugin dependencies
+	// OpenCode requires this to load local plugins with TypeScript support
+	pluginRoot := filepath.Join(workDir, pluginDir)
+	packageJsonPath := filepath.Join(pluginRoot, "package.json")
+
+	if _, err := os.Stat(packageJsonPath); os.IsNotExist(err) {
+		packageJsonContent, err := pluginFS.ReadFile("plugin/package.json")
+		if err != nil {
+			return fmt.Errorf("reading plugin package.json template: %w", err)
+		}
+
+		if err := os.WriteFile(packageJsonPath, packageJsonContent, 0644); err != nil {
+			return fmt.Errorf("writing plugin package.json: %w", err)
+		}
 	}
 
 	return nil
