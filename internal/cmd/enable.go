@@ -108,11 +108,14 @@ func configureExistingAgentHooks() int {
 			continue
 		}
 
-		// Configure witness
-		witnessDir := filepath.Join(rigDir, "witness")
-		if _, err := os.Stat(witnessDir); err == nil {
-			witnessConfig := config.ResolveAgentConfig(townRoot, witnessDir)
-			if err := runtime.EnsureSettingsForRole(witnessDir, "witness", witnessConfig); err == nil {
+		// Configure witness (witness runs from witness/rig or witness)
+		witnessWorkDir := filepath.Join(rigDir, "witness", "rig")
+		if _, err := os.Stat(witnessWorkDir); os.IsNotExist(err) {
+			witnessWorkDir = filepath.Join(rigDir, "witness")
+		}
+		if _, err := os.Stat(witnessWorkDir); err == nil {
+			witnessConfig := config.ResolveAgentConfig(townRoot, witnessWorkDir)
+			if err := runtime.EnsureSettingsForRole(witnessWorkDir, "witness", witnessConfig); err == nil {
 				configured++
 			}
 		}
