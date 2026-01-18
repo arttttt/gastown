@@ -152,10 +152,10 @@ func (m *Manager) Start(foreground bool, agentOverride string, envOverrides []st
 
 	townRoot := m.townRoot()
 
-	// Ensure runtime settings exist in witness/ (not witness/rig/) so we don't
-	// write into the source repo. Runtime walks up to tree to find settings.
-	witnessParentDir := filepath.Join(m.rig.Path, "witness")
-	if err := runtime.EnsureSettingsForRole(witnessParentDir, "witness", runtimeConfig); err != nil {
+	// Ensure runtime settings exist in witnessDir where session runs.
+	// Settings must be in the working directory because neither Claude Code
+	// nor OpenCode do directory traversal to find settings.
+	if err := runtime.EnsureSettingsForRole(witnessDir, "witness", runtimeConfig); err != nil {
 		return fmt.Errorf("ensuring runtime settings: %w", err)
 	}
 
