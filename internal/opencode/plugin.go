@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -50,7 +51,36 @@ func EnsurePluginAt(workDir, pluginDir, pluginFile string) error {
 		if err := os.WriteFile(packageJsonPath, packageJsonContent, 0644); err != nil {
 			return fmt.Errorf("writing plugin package.json: %w", err)
 		}
+
+		// Install dependencies (required for plugin to load)
+		if err := installDependencies(pluginRoot); err != nil {
+			return fmt.Errorf("installing plugin dependencies: %w", err)
+		}
 	}
 
 	return nil
+}
+
+// installDependencies runs npm/bun install in the given directory.
+func installDependencies(dir string) error {
+	// Check if node_modules already exists
+	nodeModules := filepath.Join(dir, "node_modules")
+	if _, err := os.Stat(nodeModules); err == nil {
+		return nil // Already installed
+	}
+
+	// Try bun first (faster), fall back to npm
+	var cmd *exec.Cmd
+	if _, err := exec.LookPath("bun"); err == nil {
+		cmd = exec.Command("bun", "install")
+	} else if _, err := exec.LookPath("npm"); err == nil {
+		cmd = exec.Command("npm", "install", "--silent")
+	} else {
+		return fmt.Errorf("neither bun nor npm found in PATH")
+	}
+
+	cmd.Dir = dir
+	cmd.Stdout = nil // Suppress output
+	cmd.Stderr = nil
+	return cmd.Run()
 }
