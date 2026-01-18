@@ -198,19 +198,18 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("   ✓ Created mayor/CLAUDE.md\n")
 	}
 
-	// Create mayor settings (mayor runs from ~/gt/mayor/)
-	// IMPORTANT: Settings must be in ~/gt/mayor/.claude/, NOT ~/gt/.claude/
-	// Settings at town root would be found by ALL agents via directory traversal,
-	// causing crew/polecat/etc to cd to town root before running commands.
-	// mayorDir already defined above
+	// Create mayor settings (mayor runs from town root ~/gt)
+	// Settings must be in town root because OpenCode looks for plugins
+	// relative to the working directory, not by directory traversal.
+	// mayorDir already defined above for CLAUDE.md
 	if err := os.MkdirAll(mayorDir, 0755); err != nil {
 		fmt.Printf("   %s Could not create mayor directory: %v\n", style.Dim.Render("⚠"), err)
 	} else {
 		mayorConfig := config.ResolveAgentConfig(absPath, filepath.Join(absPath, "mayor"))
-		if err := runtime.EnsureSettingsForRole(mayorDir, "mayor", mayorConfig); err != nil {
+		if err := runtime.EnsureSettingsForRole(absPath, "mayor", mayorConfig); err != nil {
 			fmt.Printf("   %s Could not create mayor settings: %v\n", style.Dim.Render("⚠"), err)
 		} else {
-			fmt.Printf("   ✓ Created mayor/.claude/settings.json\n")
+			fmt.Printf("   ✓ Created mayor settings in town root\n")
 		}
 	}
 
