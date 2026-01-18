@@ -38,7 +38,7 @@ Technical reference for Gas Town internals. Read the README first.
 - Rig root is a container, not a clone
 - `.repo.git/` is bare - refinery and polecats are worktrees
 - Per-rig `mayor/rig/` holds canonical `.beads/`, others inherit via redirect
-- Settings placed in parent dirs (not git clones) for upward traversal
+- Settings placed in each agent's working directory (no parent traversal)
 
 ## Beads Routing
 
@@ -303,6 +303,11 @@ directory tree to find settings. Each agent must have settings in its own
 working directory. Git sparse checkout prevents settings from polluting source
 repositories when agents work in git clones.
 
+**References:**
+- [Claude Code settings documentation](https://code.claude.com/docs/en/settings) - confirms project settings are in `.claude/settings.json`
+- [GitHub Issue #12962](https://github.com/anthropics/claude-code/issues/12962) - feature request for parent directory traversal (not implemented)
+- Note: Only `CLAUDE.md` files support parent directory traversal in Claude Code
+
 ### CLAUDE.md Locations
 
 Role context is delivered via CLAUDE.md files or ephemeral injection:
@@ -353,9 +358,9 @@ Claude Code's settings search order (first match wins):
 1. `.claude/settings.json` in current working directory
 2. `~/.claude/settings.json` (user global settings)
 
-**Note:** Claude Code does NOT traverse up the directory tree. Settings must
-be placed directly in the agent's working directory. Gas Town ensures each
-agent has settings in its session working directory.
+**Note:** Claude Code does NOT traverse up the directory tree (see [Issue #12962](https://github.com/anthropics/claude-code/issues/12962)).
+Settings must be placed directly in the agent's working directory. Gas Town
+ensures each agent has settings in its session working directory.
 
 ### Settings Templates
 
