@@ -205,20 +205,26 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	// mayorDir already defined above
 	if err := os.MkdirAll(mayorDir, 0755); err != nil {
 		fmt.Printf("   %s Could not create mayor directory: %v\n", style.Dim.Render("⚠"), err)
-	} else if err := runtime.EnsureSettingsForRole(mayorDir, "mayor", nil); err != nil {
-		fmt.Printf("   %s Could not create mayor settings: %v\n", style.Dim.Render("⚠"), err)
 	} else {
-		fmt.Printf("   ✓ Created mayor/.claude/settings.json\n")
+		mayorConfig := config.ResolveAgentConfig(absPath, filepath.Join(absPath, "mayor"))
+		if err := runtime.EnsureSettingsForRole(mayorDir, "mayor", mayorConfig); err != nil {
+			fmt.Printf("   %s Could not create mayor settings: %v\n", style.Dim.Render("⚠"), err)
+		} else {
+			fmt.Printf("   ✓ Created mayor/.claude/settings.json\n")
+		}
 	}
 
 	// Create deacon directory and settings (deacon runs from ~/gt/deacon/)
 	deaconDir := filepath.Join(absPath, "deacon")
 	if err := os.MkdirAll(deaconDir, 0755); err != nil {
 		fmt.Printf("   %s Could not create deacon directory: %v\n", style.Dim.Render("⚠"), err)
-	} else if err := runtime.EnsureSettingsForRole(deaconDir, "deacon", nil); err != nil {
-		fmt.Printf("   %s Could not create deacon settings: %v\n", style.Dim.Render("⚠"), err)
 	} else {
-		fmt.Printf("   ✓ Created deacon/.claude/settings.json\n")
+		deaconConfig := config.ResolveAgentConfig(absPath, deaconDir)
+		if err := runtime.EnsureSettingsForRole(deaconDir, "deacon", deaconConfig); err != nil {
+			fmt.Printf("   %s Could not create deacon settings: %v\n", style.Dim.Render("⚠"), err)
+		} else {
+			fmt.Printf("   ✓ Created deacon/.claude/settings.json\n")
+		}
 	}
 
 	// Initialize git BEFORE beads so that bd can compute repository fingerprint.
