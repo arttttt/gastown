@@ -13,6 +13,20 @@ import (
 )
 
 // EnsureSettingsForRole installs runtime hook settings when supported.
+//
+// IMPORTANT: Settings must be installed in workDir (the session's working directory),
+// NOT in a parent directory. Neither Claude Code nor OpenCode traverse parent
+// directories to find settings:
+//
+//   - Claude Code: Does NOT walk up parent directories for .claude/settings.json.
+//     This is an open feature request: https://github.com/anthropics/claude-code/issues/12962
+//     Only CLAUDE.md files support parent directory traversal.
+//
+//   - OpenCode: Documentation does not specify directory traversal for .opencode/plugins/.
+//     Plugins are loaded from project-level (.opencode/plugins/) or global (~/.config/opencode/plugins/).
+//
+// Therefore, when a session runs in a subdirectory (e.g., polecats/Toast/ or crew/emma/),
+// settings must be placed directly in that directory, not in a shared parent.
 func EnsureSettingsForRole(workDir, role string, rc *config.RuntimeConfig) error {
 	if rc == nil {
 		rc = config.DefaultRuntimeConfig()
