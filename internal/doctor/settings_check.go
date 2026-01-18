@@ -8,7 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/steveyegge/gastown/internal/claude"
+	"github.com/steveyegge/gastown/internal/config"
+	"github.com/steveyegge/gastown/internal/runtime"
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/style"
 	"github.com/steveyegge/gastown/internal/templates"
@@ -130,19 +131,17 @@ var knownHooksDirs = []string{".claude", ".opencode"}
 func (c *AgentSettingsCheck) findSettingsFiles(townRoot string) []staleSettingsInfo {
 	var files []staleSettingsInfo
 
-	// Check for STALE settings at town root (~/gt/.claude/ or ~/gt/.opencode/)
-	// This is WRONG - settings here pollute ALL child workspaces via directory traversal.
-	// Mayor settings should be at ~/gt/mayor/<hooksDir>/ instead.
+	// Town-level: mayor settings at town root (~/gt/.claude/ or ~/gt/.opencode/)
+	// This is CORRECT - Mayor runs from town root, so settings must be here.
+	// Neither Claude Code nor OpenCode do directory traversal to find settings.
 	for _, hooksDir := range knownHooksDirs {
-		staleTownRootSettings := filepath.Join(townRoot, hooksDir, "settings.json")
-		if fileExists(staleTownRootSettings) {
+		mayorTownRootSettings := filepath.Join(townRoot, hooksDir, "settings.json")
+		if fileExists(mayorTownRootSettings) {
 			files = append(files, staleSettingsInfo{
-				path:          staleTownRootSettings,
-				agentType:     "mayor",
-				sessionName:   "hq-mayor",
-				wrongLocation: true,
-				gitStatus:     c.getGitFileStatus(staleTownRootSettings),
-				missing:       []string{fmt.Sprintf("should be at mayor/%s/settings.json, not town root", hooksDir)},
+				path:        mayorTownRootSettings,
+				agentType:   "mayor",
+				sessionName: "hq-mayor",
+				gitStatus:   c.getGitFileStatus(mayorTownRootSettings),
 			})
 		}
 	}
@@ -163,17 +162,8 @@ func (c *AgentSettingsCheck) findSettingsFiles(townRoot string) []staleSettingsI
 		})
 	}
 
-	// Town-level: mayor (~/gt/mayor/<hooksDir>/settings.json) - CORRECT location
-	mayorDir := filepath.Join(townRoot, "mayor")
-	mayorHooksDir := DetectHooksDir(mayorDir)
-	mayorSettings := filepath.Join(mayorDir, mayorHooksDir, "settings.json")
-	if fileExists(mayorSettings) {
-		files = append(files, staleSettingsInfo{
-			path:        mayorSettings,
-			agentType:   "mayor",
-			sessionName: "hq-mayor",
-		})
-	}
+	// Note: Mayor settings in ~/gt/mayor/ are legacy (pre-OpenCode).
+	// Mayor now runs from town root, so settings there are handled above.
 
 	// Town-level: deacon (~/gt/deacon/<hooksDir>/settings.json)
 	deaconDir := filepath.Join(townRoot, "deacon")
@@ -503,15 +493,8 @@ func (c *AgentSettingsCheck) Fix(ctx *CheckContext) error {
 		if sf.wrongLocation {
 			mayorDir := filepath.Join(ctx.TownRoot, "mayor")
 
-			// For mayor settings.json at town root, create at mayor/<hooksDir>/
-			isHooksDir := strings.HasSuffix(hooksDir, ".claude") || strings.HasSuffix(hooksDir, ".opencode")
-			if sf.agentType == "mayor" && isHooksDir && !strings.Contains(sf.path, "/mayor/") {
-				if err := os.MkdirAll(mayorDir, 0755); err == nil {
-					_ = claude.EnsureSettingsForRole(mayorDir, "mayor")
-				}
-			}
-
 			// For mayor CLAUDE.md at town root, create at mayor/
+			// Note: Mayor settings.json at town root are now CORRECT (Mayor runs from townRoot)
 			if sf.agentType == "mayor" && strings.HasSuffix(sf.path, "CLAUDE.md") && !strings.Contains(sf.path, "/mayor/") {
 				townName, _ := workspace.GetTownName(ctx.TownRoot)
 				if err := templates.CreateMayorCLAUDEmd(
@@ -525,18 +508,15 @@ func (c *AgentSettingsCheck) Fix(ctx *CheckContext) error {
 				}
 			}
 
-			// Town-root files were inherited by ALL agents via directory traversal.
-			// Warn user to restart agents - don't auto-kill sessions as that's too disruptive,
-			// especially since deacon runs gt doctor automatically which would create a loop.
-			// Settings are only read at startup, so running agents already have config loaded.
-			fmt.Printf("\n  %s Town-root settings were moved. Restart agents to pick up new config:\n", style.Warning.Render("⚠"))
-			fmt.Printf("      gt up --restart\n\n")
+			fmt.Printf("\n  %s File was in wrong location and has been moved.\n", style.Warning.Render("⚠"))
+			fmt.Printf("      Restart affected agents to pick up new config: gt up --restart\n\n")
 			continue
 		}
 
-		// Recreate settings using EnsureSettingsForRole
+		// Recreate settings using runtime.EnsureSettingsForRole for OpenCode support
 		workDir := filepath.Dir(hooksDir) // agent work directory
-		if err := claude.EnsureSettingsForRole(workDir, sf.agentType); err != nil {
+		runtimeConfig := config.ResolveAgentConfig(ctx.TownRoot, workDir)
+		if err := runtime.EnsureSettingsForRole(workDir, sf.agentType, runtimeConfig); err != nil {
 			errors = append(errors, fmt.Sprintf("failed to recreate settings for %s: %v", sf.path, err))
 			continue
 		}
