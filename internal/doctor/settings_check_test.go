@@ -179,9 +179,9 @@ func createStaleSettings(t *testing.T, path string, missingElements ...string) {
 func TestSettingsCheck_ValidMayorSettings(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create valid mayor settings at correct location (mayor/.claude/settings.json)
-	// NOT at town root (.claude/settings.json) which is wrong location
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	// Create valid mayor settings at correct location (town root: .claude/settings.json)
+	// Mayor runs from town root, so settings must be there (not in mayor/ subdirectory)
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	createValidSettings(t, mayorSettings)
 
 	check := NewAgentSettingsCheck()
@@ -286,8 +286,8 @@ func TestSettingsCheck_ValidPolecatSettings(t *testing.T) {
 func TestSettingsCheck_MissingEnabledPlugins(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create stale mayor settings missing enabledPlugins (at correct location)
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	// Create stale mayor settings missing enabledPlugins (at town root)
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	createStaleSettings(t, mayorSettings, "enabledPlugins")
 
 	check := NewAgentSettingsCheck()
@@ -306,8 +306,8 @@ func TestSettingsCheck_MissingEnabledPlugins(t *testing.T) {
 func TestSettingsCheck_MissingHooks(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create stale settings missing hooks entirely (at correct location)
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	// Create stale settings missing hooks entirely (at town root)
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	createStaleSettings(t, mayorSettings, "hooks")
 
 	check := NewAgentSettingsCheck()
@@ -323,8 +323,8 @@ func TestSettingsCheck_MissingHooks(t *testing.T) {
 func TestSettingsCheck_MissingPATH(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create stale settings missing PATH export (at correct location)
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	// Create stale settings missing PATH export (at town root)
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	createStaleSettings(t, mayorSettings, "PATH")
 
 	check := NewAgentSettingsCheck()
@@ -350,8 +350,8 @@ func TestSettingsCheck_MissingPATH(t *testing.T) {
 func TestSettingsCheck_MissingDeaconNudge(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create stale settings missing deacon nudge (at correct location)
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	// Create stale settings missing deacon nudge (at town root)
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	createStaleSettings(t, mayorSettings, "deacon-nudge")
 
 	check := NewAgentSettingsCheck()
@@ -377,8 +377,8 @@ func TestSettingsCheck_MissingDeaconNudge(t *testing.T) {
 func TestSettingsCheck_MissingStopHook(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create stale settings missing Stop hook (at correct location)
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	// Create stale settings missing Stop hook (at town root)
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	createStaleSettings(t, mayorSettings, "Stop")
 
 	check := NewAgentSettingsCheck()
@@ -464,7 +464,7 @@ func TestSettingsCheck_MultipleStaleFiles(t *testing.T) {
 	rigName := "testrig"
 
 	// Create multiple stale settings files (all at correct locations)
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	createStaleSettings(t, mayorSettings, "PATH")
 
 	deaconSettings := filepath.Join(tmpDir, "deacon", ".claude", "settings.json")
@@ -490,8 +490,8 @@ func TestSettingsCheck_MultipleStaleFiles(t *testing.T) {
 func TestSettingsCheck_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create invalid JSON file (at correct location)
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	// Create invalid JSON file (at town root)
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	if err := os.MkdirAll(filepath.Dir(mayorSettings), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -588,8 +588,8 @@ func TestSettingsCheck_MixedValidAndStale(t *testing.T) {
 	tmpDir := t.TempDir()
 	rigName := "testrig"
 
-	// Create valid mayor settings (at correct location)
-	mayorSettings := filepath.Join(tmpDir, "mayor", ".claude", "settings.json")
+	// Create valid mayor settings (at town root)
+	mayorSettings := filepath.Join(tmpDir, ".claude", "settings.json")
 	createValidSettings(t, mayorSettings)
 
 	// Create stale witness settings in correct location (missing PATH)
@@ -1017,68 +1017,21 @@ func TestSettingsCheck_FixMovesCLAUDEmdToMayor(t *testing.T) {
 	}
 }
 
-func TestSettingsCheck_TownRootSettingsWarnsInsteadOfKilling(t *testing.T) {
+func TestSettingsCheck_TownRootSettingsIsCorrectForMayor(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create mayor directory (needed for fix to recreate settings there)
-	mayorDir := filepath.Join(tmpDir, "mayor")
-	if err := os.MkdirAll(mayorDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create settings.json at town root (wrong location - pollutes all agents)
-	staleTownRootDir := filepath.Join(tmpDir, ".claude")
-	if err := os.MkdirAll(staleTownRootDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	staleTownRootSettings := filepath.Join(staleTownRootDir, "settings.json")
-	// Create valid settings content
-	settingsContent := `{
-		"env": {"PATH": "/usr/bin"},
-		"enabledPlugins": ["claude-code-expert"],
-		"hooks": {
-			"SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "gt prime"}]}],
-			"Stop": [{"matcher": "", "hooks": [{"type": "command", "command": "gt handoff"}]}]
-		}
-	}`
-	if err := os.WriteFile(staleTownRootSettings, []byte(settingsContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	// Create valid mayor settings at town root (this is the CORRECT location)
+	// Mayor runs from town root, so settings must be there.
+	// This is the new behavior after OpenCode support - Mayor settings are at town root.
+	townRootSettings := filepath.Join(tmpDir, ".claude", "settings.json")
+	createValidSettings(t, townRootSettings)
 
 	check := NewAgentSettingsCheck()
 	ctx := &CheckContext{TownRoot: tmpDir}
 
-	// Run to detect
+	// Run to detect - should be OK since town root is correct for Mayor
 	result := check.Run(ctx)
-	if result.Status != StatusError {
-		t.Fatalf("expected StatusError for town root settings, got %v", result.Status)
-	}
-
-	// Verify it's flagged as wrong location
-	foundWrongLocation := false
-	for _, d := range result.Details {
-		if strings.Contains(d, "wrong location") {
-			foundWrongLocation = true
-			break
-		}
-	}
-	if !foundWrongLocation {
-		t.Errorf("expected details to mention wrong location, got %v", result.Details)
-	}
-
-	// Apply fix - should NOT return error and should NOT kill sessions
-	// (session killing would require tmux which isn't available in tests)
-	if err := check.Fix(ctx); err != nil {
-		t.Fatalf("Fix failed: %v", err)
-	}
-
-	// Verify stale file was deleted
-	if _, err := os.Stat(staleTownRootSettings); !os.IsNotExist(err) {
-		t.Error("expected settings.json at town root to be deleted")
-	}
-
-	// Verify .claude directory was cleaned up (best-effort)
-	if _, err := os.Stat(staleTownRootDir); !os.IsNotExist(err) {
-		t.Error("expected .claude directory at town root to be deleted")
+	if result.Status != StatusOK {
+		t.Errorf("expected StatusOK for valid town root settings, got %v: %s", result.Status, result.Message)
 	}
 }

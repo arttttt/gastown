@@ -166,9 +166,11 @@ func setupWorkspaceWithRig(t *testing.T, root, rigName string) {
 	}
 
 	// Create rig directories
+	// Note: witness and refinery run from their rig subdirectory (e.g., witness/rig)
+	// The configureExistingAgentHooks function looks for these paths
 	rigDir := filepath.Join(root, rigName)
-	os.MkdirAll(filepath.Join(rigDir, "witness"), 0755)
-	os.MkdirAll(filepath.Join(rigDir, "refinery"), 0755)
+	os.MkdirAll(filepath.Join(rigDir, "witness", "rig"), 0755)
+	os.MkdirAll(filepath.Join(rigDir, "refinery", "rig"), 0755)
 	os.MkdirAll(filepath.Join(rigDir, "polecats"), 0755)
 	os.MkdirAll(filepath.Join(rigDir, "crew"), 0755)
 }
