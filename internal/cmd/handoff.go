@@ -203,8 +203,10 @@ func runHandoff(cmd *cobra.Command, args []string) error {
 		_ = os.WriteFile(markerPath, []byte(currentSession), 0644)
 	}
 
-	// Use exec to respawn the pane - this kills us and restarts
-	return t.RespawnPane(pane, restartCmd)
+	// Use RespawnPaneWithProcesses to ensure all processes are killed before respawn.
+	// Plain RespawnPane uses tmux's -k flag which may not kill all descendants,
+	// leading to orphaned Claude processes after handoff.
+	return t.RespawnPaneWithProcesses(pane, restartCmd)
 }
 
 // getCurrentTmuxSession returns the current tmux session name.
@@ -524,8 +526,8 @@ func handoffRemoteSession(t *tmux.Tmux, targetSession, restartCmd string) error 
 		style.PrintWarning("could not clear history: %v", err)
 	}
 
-	// Respawn the remote session's pane
-	if err := t.RespawnPane(targetPane, restartCmd); err != nil {
+	// Respawn the remote session's pane with proper process cleanup
+	if err := t.RespawnPaneWithProcesses(targetPane, restartCmd); err != nil {
 		return fmt.Errorf("respawning pane: %w", err)
 	}
 

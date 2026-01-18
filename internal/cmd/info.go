@@ -75,6 +75,20 @@ type VersionChange struct {
 // versionChanges contains agent-actionable changes for recent versions
 var versionChanges = []VersionChange{
 	{
+		Version: "0.4.0-fix",
+		Date:    "2026-01-17",
+		Changes: []string{
+			"NEW: OpenCode support - use --agent opencode for alternative AI backend",
+			"FIX: Process tree cleanup - KillSessionWithProcesses across all managers",
+			"FIX: Handoff process leak - RespawnPaneWithProcesses kills entire process tree before respawn",
+			"FIX: OpenCode formula prefix - uses oc- instead of mol-",
+			"FIX: OpenCode session.compacted handler - auto-repriming after compaction",
+			"FIX: Deacon heartbeat parsing - fixes stale detection showing 292 years",
+			"FIX: Refinery startup timeout - improved runtime prompt detection",
+			"FIX: Initial nudges wait for runtime ready",
+		},
+	},
+	{
 		Version: "0.4.0",
 		Date:    "2026-01-17",
 		Changes: []string{
