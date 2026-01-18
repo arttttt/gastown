@@ -62,17 +62,20 @@ func AgentEnv(cfg AgentEnvConfig) map[string]string {
 		env["GT_RIG"] = cfg.Rig
 		env["BD_ACTOR"] = fmt.Sprintf("%s/witness", cfg.Rig)
 		env["GIT_AUTHOR_NAME"] = fmt.Sprintf("%s/witness", cfg.Rig)
+		env["GT_AUTO_INIT"] = "1" // Enable OpenCode plugin auto-init
 
 	case "refinery":
 		env["GT_RIG"] = cfg.Rig
 		env["BD_ACTOR"] = fmt.Sprintf("%s/refinery", cfg.Rig)
 		env["GIT_AUTHOR_NAME"] = fmt.Sprintf("%s/refinery", cfg.Rig)
+		env["GT_AUTO_INIT"] = "1" // Enable OpenCode plugin auto-init
 
 	case "polecat":
 		env["GT_RIG"] = cfg.Rig
 		env["GT_POLECAT"] = cfg.AgentName
 		env["BD_ACTOR"] = fmt.Sprintf("%s/polecats/%s", cfg.Rig, cfg.AgentName)
 		env["GIT_AUTHOR_NAME"] = cfg.AgentName
+		env["GT_AUTO_INIT"] = "1" // Enable OpenCode plugin auto-init
 
 	case "crew":
 		env["GT_RIG"] = cfg.Rig

@@ -840,8 +840,8 @@ func TestRuntimeConfigProviderInference(t *testing.T) {
 	if rc.Hooks == nil || rc.Hooks.Provider != "opencode" {
 		t.Errorf("Hooks.Provider = %q, want %q", rc.Hooks.Provider, "opencode")
 	}
-	if rc.PromptMode != "none" {
-		t.Errorf("PromptMode = %q, want %q", rc.PromptMode, "none")
+	if rc.PromptMode != "flag" {
+		t.Errorf("PromptMode = %q, want %q", rc.PromptMode, "flag")
 	}
 }
 
