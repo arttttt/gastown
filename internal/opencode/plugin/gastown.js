@@ -129,7 +129,11 @@ export const GasTown = async ({ client, $ }) => {
       }
 
       if (event.type === "session.deleted") {
-        injectedSessions.delete(event.properties?.info?.id);
+        const sessionID = event.properties?.info?.id;
+        injectedSessions.delete(sessionID);
+        
+        // Record session cost (Stop hook equivalent)
+        $`gt costs record --session ${sessionID}`.text().catch(() => {});
       }
     },
 
