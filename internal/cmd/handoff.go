@@ -379,30 +379,23 @@ func buildRestartCommand(sessionName string) (string, error) {
 		Topic:     "handoff",
 	})
 
-	// For respawn-pane, we:
-	// 1. cd to the right directory (role's canonical home)
-	// 2. export GT_ROLE and BD_ACTOR so role detection works correctly
-	// 3. export Claude-related env vars (not inherited by fresh shell)
-	// 4. run claude with the startup beacon (triggers immediate context loading)
-	// Use exec to ensure clean process replacement.
-	runtimeCmd := config.GetRuntimeCommandWithPrompt("", beacon)
-
-	// Build environment exports - role vars first, then Claude vars
-	var exports []string
-	if gtRole != "" {
-		runtimeConfig := config.LoadRuntimeConfig("")
-		exports = append(exports, "GT_ROLE="+gtRole)
-		exports = append(exports, "BD_ACTOR="+gtRole)
-		exports = append(exports, "GIT_AUTHOR_NAME="+gtRole)
-		if runtimeConfig.Session != nil && runtimeConfig.Session.SessionIDEnv != "" {
-			exports = append(exports, "GT_SESSION_ID_ENV="+runtimeConfig.Session.SessionIDEnv)
-		}
+	// Determine rigPath for BuildAgentStartupCommand
+	var rigPath string
+	if identity.Rig != "" {
+		rigPath = filepath.Join(townRoot, identity.Rig)
 	}
 
-	// Add Claude-related env vars from current environment
+	// Build role-aware runtime command using BuildAgentStartupCommand
+	// This respects role_agents configuration for per-role model selection
+	runtimeCmd := config.BuildAgentStartupCommand(gtRole, identity.Rig, townRoot, rigPath, beacon)
+
+	// For respawn-pane, we need to:
+	// 1. cd to the right directory (role's canonical home)
+	// 2. export Claude-related env vars (not inherited by fresh shell)
+	// 3. exec role-aware runtime command (includes GT_ROLE, BD_ACTOR, etc.)
+	var exports []string
 	for _, name := range claudeEnvVars {
 		if val := os.Getenv(name); val != "" {
-			// Shell-escape the value in case it contains special chars
 			exports = append(exports, fmt.Sprintf("%s=%q", name, val))
 		}
 	}
