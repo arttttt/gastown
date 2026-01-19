@@ -150,8 +150,18 @@ func (c *PrimingCheck) checkAgentPriming(townRoot, agentDir, _ string) []priming
 		}
 	}
 
-	// Check AGENTS.md is minimal (bootstrap pointer, not full context)
+	// Check AGENTS.md exists alongside CLAUDE.md (for OpenCode/Codex compatibility)
 	agentsMdPath := filepath.Join(agentPath, "AGENTS.md")
+	if fileExists(claudeMdPath) && !fileExists(agentsMdPath) {
+		issues = append(issues, primingIssue{
+			location:    agentDir,
+			issueType:   "missing_agents_md",
+			description: "Missing AGENTS.md (needed for OpenCode/Codex compatibility)",
+			fixable:     true,
+		})
+	}
+
+	// Check AGENTS.md is minimal (bootstrap pointer, not full context)
 	if fileExists(agentsMdPath) {
 		lines := c.countLines(agentsMdPath)
 		if lines > 20 {
@@ -364,6 +374,24 @@ func (c *PrimingCheck) Fix(ctx *CheckContext) error {
 				if err := beads.ProvisionPrimeMD(targetPath); err != nil {
 					errors = append(errors, fmt.Sprintf("%s: %v", issue.location, err))
 				}
+			}
+
+		case "missing_agents_md":
+			// Create AGENTS.md pointer file for OpenCode/Codex compatibility
+			agentPath := filepath.Join(ctx.TownRoot, issue.location)
+			agentsMdPath := filepath.Join(agentPath, "AGENTS.md")
+			agentsContent := `# Agent Instructions
+
+See **CLAUDE.md** for complete agent context and instructions.
+
+This file exists for compatibility with tools that look for AGENTS.md.
+
+> **Recovery**: Run ` + "`gt prime`" + ` after compaction, clear, or new session
+
+Full context is injected by ` + "`gt prime`" + ` at session start.
+`
+			if err := os.WriteFile(agentsMdPath, []byte(agentsContent), 0644); err != nil {
+				errors = append(errors, fmt.Sprintf("%s: %v", issue.location, err))
 			}
 		}
 	}

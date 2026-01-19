@@ -137,6 +137,7 @@ func (t *Templates) MessageNames() []string {
 }
 
 // CreateMayorCLAUDEmd creates the Mayor's CLAUDE.md file at the specified directory.
+// Also creates AGENTS.md as a pointer to CLAUDE.md for compatibility with other agents.
 // This is used by both gt install and gt doctor --fix.
 func CreateMayorCLAUDEmd(mayorDir, townRoot, townName, mayorSession, deaconSession string) error {
 	tmpl, err := New()
@@ -159,7 +160,23 @@ func CreateMayorCLAUDEmd(mayorDir, townRoot, townName, mayorSession, deaconSessi
 	}
 
 	claudePath := filepath.Join(mayorDir, "CLAUDE.md")
-	return os.WriteFile(claudePath, []byte(content), 0644)
+	if err := os.WriteFile(claudePath, []byte(content), 0644); err != nil {
+		return err
+	}
+
+	// Create AGENTS.md as pointer to CLAUDE.md for compatibility with OpenCode/Codex
+	agentsContent := `# Agent Instructions
+
+See **CLAUDE.md** for complete agent context and instructions.
+
+This file exists for compatibility with tools that look for AGENTS.md.
+
+> **Recovery**: Run ` + "`gt prime`" + ` after compaction, clear, or new session
+
+Full context is injected by ` + "`gt prime`" + ` at session start.
+`
+	agentsPath := filepath.Join(mayorDir, "AGENTS.md")
+	return os.WriteFile(agentsPath, []byte(agentsContent), 0644)
 }
 
 // GetAllRoleTemplates returns all role templates as a map of filename to content.
