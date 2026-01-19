@@ -1248,6 +1248,11 @@ func BuildStartupCommand(envVars map[string]string, rigPath, prompt string) stri
 		}
 	}
 
+	// Validate that an agent is configured
+	if rc != nil && rc.Command == "" {
+		fmt.Fprintf(os.Stderr, "warning: no agent configured - set default_agent in settings/config.json\n")
+	}
+
 	// Copy env vars to avoid mutating caller map
 	resolvedEnv := make(map[string]string, len(envVars)+2)
 	for k, v := range envVars {
