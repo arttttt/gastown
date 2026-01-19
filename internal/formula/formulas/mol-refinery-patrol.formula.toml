@@ -1,9 +1,21 @@
 description = """
 Merge queue processor patrol loop.
 
-The Refinery is the Engineer in the engine room. You process polecat branches, merging them to main one at a time with sequential rebasing.
+The Refinery is the Engineer in the engine room. You process polecat branches, merging them to their target branch one at a time with sequential rebasing.
 
 **The Scotty Test**: Before proceeding past any failure, ask yourself: "Would Scotty walk past a warp core leak because it existed before his shift?"
+
+## Variables (Per MR)
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| mr_id | queue-scan | The MR bead ID being processed |
+| branch | MR description | Source branch (e.g., feature/hq-tg7wj.2) |
+| target | MR description | Destination branch (main or integration/xxx) |
+| source_issue | MR description | Original issue ID |
+
+**CRITICAL**: Before processing each MR, run `bd show <mr_id>` and extract the `target:`
+field from the description. Use this <target> instead of hardcoded "main" in ALL git commands.
 
 ## Merge Flow
 
@@ -120,19 +132,32 @@ If branch doesn't exist for a queued MR:
 - Close the MR bead: `bd close <mr-id> --reason "Branch no longer exists"`
 - Remove from processing queue
 
-Track verified MR list for this cycle."""
+**IMPORTANT**: For each MR, extract the target branch:
+```bash
+bd show <mr-id>
+# Parse "target: <value>" from description
+# This is the branch to rebase onto and merge into (may be "main" or "integration/xxx")
+```
+
+Track verified MR list for this cycle, including the target branch for each."""
 
 [[steps]]
 id = "process-branch"
 title = "Mechanical rebase"
 needs = ["queue-scan"]
 description = """
-Pick next branch from queue. Attempt mechanical rebase on current main.
+Pick next branch from queue. Attempt mechanical rebase on the TARGET branch (from MR bead).
 
-**Step 1: Checkout and attempt rebase**
+**Step 0: Get target branch from MR bead**
+```bash
+bd show <mr-id>
+# Extract "target: <value>" - this is <target> (e.g., "main" or "integration/hq-xxx")
+```
+
+**Step 1: Checkout and attempt rebase onto TARGET**
 ```bash
 git checkout -b temp origin/<polecat-branch>
-git rebase origin/main
+git rebase origin/<target>   # Use target from MR bead, NOT hardcoded "main"!
 ```
 
 **Step 2: Check rebase result**
@@ -161,8 +186,8 @@ git rebase --abort
 
 2. **Record conflict metadata**:
 ```bash
-# Capture main SHA for reference
-MAIN_SHA=$(git rev-parse origin/main)
+# Capture target SHA for reference
+TARGET_SHA=$(git rev-parse origin/<target>)
 BRANCH_SHA=$(git rev-parse origin/<polecat-branch>)
 ```
 
@@ -175,12 +200,13 @@ bd create --type=task --priority=1 \
 Original MR: <mr-bead-id>
 Branch: <polecat-branch>
 Original Issue: <issue-id>
-Conflict with main at: ${MAIN_SHA}
+Target: <target>
+Conflict with <target> at: ${TARGET_SHA}
 Branch SHA: ${BRANCH_SHA}
 
 ## Instructions
 1. Clone/checkout the branch
-2. Rebase on current main: git rebase origin/main
+2. Rebase on target: git rebase origin/<target>
 3. Resolve conflicts
 4. Force push: git push -f origin <branch>
 5. Close this task when done
@@ -239,16 +265,16 @@ This is non-negotiable. Never disavow. Never "note and proceed." """
 
 [[steps]]
 id = "merge-push"
-title = "Merge and push to main"
+title = "Merge and push to target"
 needs = ["handle-failures"]
 description = """
-Merge to main and push. CRITICAL: Notifications come IMMEDIATELY after push.
+Merge to TARGET branch and push. CRITICAL: Notifications come IMMEDIATELY after push.
 
-**Step 1: Merge and Push**
+**Step 1: Merge and Push to TARGET**
 ```bash
-git checkout main
+git checkout <target>         # Use target from MR bead (main or integration/xxx)
 git merge --ff-only temp
-git push origin main
+git push origin <target>      # Push to the correct target branch
 ```
 
 ⚠️ **STOP HERE - DO NOT PROCEED UNTIL STEPS 2-3 COMPLETE**
@@ -268,18 +294,18 @@ POLECAT WORKTREES ACCUMULATE INDEFINITELY AND THE LIFECYCLE BREAKS.
 
 **Step 3: Close MR Bead (REQUIRED - DO THIS IMMEDIATELY)**
 
-⚠️ **VERIFICATION BEFORE CLOSING**: Confirm the work is actually on main:
+⚠️ **VERIFICATION BEFORE CLOSING**: Confirm the work is actually on target:
 ```bash
 # Get the commit message/issue from the branch
-git log origin/main --oneline | grep "<issue-id>"
-# OR verify the commit SHA is on main:
-git branch --contains <commit-sha> | grep main
+git log origin/<target> --oneline | grep "<issue-id>"
+# OR verify the commit SHA is on target:
+git branch --contains <commit-sha> | grep <target>
 ```
 
-If work is NOT on main, DO NOT close the MR bead. Investigate first.
+If work is NOT on target, DO NOT close the MR bead. Investigate first.
 
 ```bash
-bd close <mr-bead-id> --reason "Merged to main at $(git rev-parse --short HEAD)"
+bd close <mr-bead-id> --reason "Merged to <target> at $(git rev-parse --short HEAD)"
 ```
 
 The MR bead ID was in the MERGE_READY message or find via:
@@ -309,7 +335,7 @@ git push origin --delete <polecat-branch>
 
 If you skipped notifications or archiving, GO BACK AND DO THEM NOW.
 
-Main has moved. Any remaining branches need rebasing on new baseline."""
+Target branch has moved. Any remaining branches targeting the same branch need rebasing on new baseline."""
 
 [[steps]]
 id = "loop-check"
