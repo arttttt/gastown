@@ -2,8 +2,8 @@
 package config
 
 import (
-	"path/filepath"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -68,7 +68,7 @@ func NewTownSettings() *TownSettings {
 	return &TownSettings{
 		Type:         "town-settings",
 		Version:      CurrentTownSettingsVersion,
-		DefaultAgent: "claude",
+		DefaultAgent: "",
 		Agents:       make(map[string]*RuntimeConfig),
 		RoleAgents:   make(map[string]string),
 	}
@@ -331,7 +331,7 @@ type RuntimeInstructionsConfig struct {
 
 // DefaultRuntimeConfig returns a RuntimeConfig with sensible defaults.
 func DefaultRuntimeConfig() *RuntimeConfig {
-	return normalizeRuntimeConfig(&RuntimeConfig{Provider: "claude"})
+	return normalizeRuntimeConfig(&RuntimeConfig{})
 }
 
 // BuildCommand returns the full command line string.
@@ -411,10 +411,7 @@ func normalizeRuntimeConfig(rc *RuntimeConfig) *RuntimeConfig {
 	if rc.Provider == "" {
 		rc.Provider = inferProviderFromCommand(rc.Command)
 	}
-	if rc.Provider == "" {
-		rc.Provider = "claude"
-	}
-
+	// No default provider fallback - configuration should explicitly set provider
 	if rc.Command == "" {
 		rc.Command = defaultRuntimeCommand(rc.Provider)
 	}
@@ -508,7 +505,7 @@ func defaultRuntimeCommand(provider string) string {
 	case "generic":
 		return ""
 	default:
-		return "claude"
+		return ""
 	}
 }
 
