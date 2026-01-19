@@ -752,6 +752,7 @@ func LoadOrCreateTownSettings(path string) (*TownSettings, error) {
 
 	var settings TownSettings
 	if err := json.Unmarshal(data, &settings); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: invalid JSON in %s: %v\n", path, err)
 		return nil, err
 	}
 	return &settings, nil
@@ -826,8 +827,6 @@ func ResolveAgentConfig(townRoot, rigPath string) *RuntimeConfig {
 		agentName = rigSettings.Agent
 	} else if townSettings.DefaultAgent != "" {
 		agentName = townSettings.DefaultAgent
-	} else {
-		agentName = "claude" // ultimate fallback
 	}
 
 	return lookupAgentConfig(agentName, townSettings, rigSettings)
@@ -870,8 +869,6 @@ func ResolveAgentConfigWithOverride(townRoot, rigPath, agentOverride string) (*R
 		agentName = rigSettings.Agent
 	} else if townSettings.DefaultAgent != "" {
 		agentName = townSettings.DefaultAgent
-	} else {
-		agentName = "claude" // ultimate fallback
 	}
 
 	// If an override is requested, validate it exists
@@ -1045,7 +1042,7 @@ func ResolveRoleAgentName(role, townRoot, rigPath string) (agentName string, isR
 	if townSettings.DefaultAgent != "" {
 		return townSettings.DefaultAgent, false
 	}
-	return "claude", false
+	return "", false
 }
 
 // lookupAgentConfig looks up an agent by name.
@@ -1086,7 +1083,7 @@ func fillRuntimeDefaults(rc *RuntimeConfig) *RuntimeConfig {
 		InitialPrompt: rc.InitialPrompt,
 	}
 	if result.Command == "" {
-		result.Command = "claude"
+		result.Command = ""
 	}
 	if result.Args == nil {
 		result.Args = []string{"--dangerously-skip-permissions"}
