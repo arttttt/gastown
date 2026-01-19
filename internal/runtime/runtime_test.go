@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -178,11 +179,15 @@ func TestStartupFallbackCommands_WithHooks(t *testing.T) {
 }
 
 func TestStartupFallbackCommands_NilConfig(t *testing.T) {
-	// Nil config defaults to claude provider, which has hooks
-	// So it returns nil (no fallback commands needed)
+	// Nil config defaults to empty provider, which has hooks provider = "none"
+	// So it returns fallback commands (no hooks configured)
 	commands := StartupFallbackCommands("polecat", nil)
-	if commands != nil {
-		t.Error("StartupFallbackCommands() with nil config should return nil (defaults to claude with hooks)")
+	if commands == nil {
+		t.Error("StartupFallbackCommands() with nil config should return fallback commands (no default provider)")
+	}
+	// Polecat is autonomous, so should have mail check
+	if len(commands) != 1 || !strings.Contains(commands[0], "gt mail check --inject") {
+		t.Errorf("Expected autonomous role command with mail check, got %v", commands)
 	}
 }
 
