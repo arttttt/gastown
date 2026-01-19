@@ -378,7 +378,10 @@ func (d *Daemon) restartSession(sessionName, identity string) error {
 	d.applySessionTheme(sessionName, parsed)
 
 	// Get and send startup command
-	startCmd := d.getStartCommand(config, parsed)
+	startCmd, err := d.getStartCommand(config, parsed)
+	if err != nil {
+		return fmt.Errorf("getting startup command: %w", err)
+	}
 	if err := d.tmux.SendKeys(sessionName, startCmd); err != nil {
 		return fmt.Errorf("sending startup command: %w", err)
 	}
@@ -460,11 +463,11 @@ func (d *Daemon) getNeedsPreSync(config *beads.RoleConfig, parsed *ParsedIdentit
 
 // getStartCommand determines the startup command for an agent.
 // Uses role bead config if available, then role-based agent selection, then hardcoded defaults.
-func (d *Daemon) getStartCommand(roleConfig *beads.RoleConfig, parsed *ParsedIdentity) string {
+func (d *Daemon) getStartCommand(roleConfig *beads.RoleConfig, parsed *ParsedIdentity) (string, error) {
 	// If role bead has explicit config, use it
 	if roleConfig != nil && roleConfig.StartCommand != "" {
 		// Expand any patterns in the command
-		return beads.ExpandRolePattern(roleConfig.StartCommand, d.config.TownRoot, parsed.RigName, parsed.AgentName, parsed.RoleType)
+		return beads.ExpandRolePattern(roleConfig.StartCommand, d.config.TownRoot, parsed.RigName, parsed.AgentName, parsed.RoleType), nil
 	}
 
 	rigPath := ""
@@ -475,7 +478,12 @@ func (d *Daemon) getStartCommand(roleConfig *beads.RoleConfig, parsed *ParsedIde
 	// Use role-based agent resolution for per-role model selection
 	runtimeConfig := config.ResolveRoleAgentConfig(parsed.RoleType, d.config.TownRoot, rigPath)
 
-	// Build default command using the role-resolved runtime config
+	// Validate that an agent is configured
+	if runtimeConfig.Command == "" {
+		return "", fmt.Errorf("no agent configured - set default_agent in settings/config.json")
+	}
+
+	// Build default command using role-resolved runtime config
 	defaultCmd := "exec " + runtimeConfig.BuildCommand()
 	if runtimeConfig.Session != nil && runtimeConfig.Session.SessionIDEnv != "" {
 		defaultCmd = config.PrependEnv(defaultCmd, map[string]string{"GT_SESSION_ID_ENV": runtimeConfig.Session.SessionIDEnv})
@@ -494,7 +502,7 @@ func (d *Daemon) getStartCommand(roleConfig *beads.RoleConfig, parsed *ParsedIde
 			TownRoot:     d.config.TownRoot,
 			SessionIDEnv: sessionIDEnv,
 		})
-		return config.PrependEnv("exec "+runtimeConfig.BuildCommand(), envVars)
+		return config.PrependEnv("exec "+runtimeConfig.BuildCommand(), envVars), nil
 	}
 
 	if parsed.RoleType == "crew" {
@@ -509,10 +517,10 @@ func (d *Daemon) getStartCommand(roleConfig *beads.RoleConfig, parsed *ParsedIde
 			TownRoot:     d.config.TownRoot,
 			SessionIDEnv: sessionIDEnv,
 		})
-		return config.PrependEnv("exec "+runtimeConfig.BuildCommand(), envVars)
+		return config.PrependEnv("exec "+runtimeConfig.BuildCommand(), envVars), nil
 	}
 
-	return defaultCmd
+	return defaultCmd, nil
 }
 
 // setSessionEnvironment sets environment variables for the tmux session.

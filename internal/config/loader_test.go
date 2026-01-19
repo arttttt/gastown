@@ -817,17 +817,17 @@ func TestMessagingConfigPath(t *testing.T) {
 func TestRuntimeConfigDefaults(t *testing.T) {
 	t.Parallel()
 	rc := DefaultRuntimeConfig()
-	if rc.Provider != "claude" {
-		t.Errorf("Provider = %q, want %q", rc.Provider, "claude")
+	if rc.Provider != "" {
+		t.Errorf("Provider = %q, want %q", rc.Provider, "")
 	}
-	if rc.Command != "claude" {
-		t.Errorf("Command = %q, want %q", rc.Command, "claude")
+	if rc.Command != "" {
+		t.Errorf("Command = %q, want %q", rc.Command, "")
 	}
-	if len(rc.Args) != 1 || rc.Args[0] != "--dangerously-skip-permissions" {
-		t.Errorf("Args = %v, want [--dangerously-skip-permissions]", rc.Args)
+	if rc.Args != nil {
+		t.Errorf("Args = %v, want nil", rc.Args)
 	}
-	if rc.Session == nil || rc.Session.SessionIDEnv != "CLAUDE_SESSION_ID" {
-		t.Errorf("SessionIDEnv = %q, want %q", rc.Session.SessionIDEnv, "CLAUDE_SESSION_ID")
+	if rc.Session == nil || rc.Session.SessionIDEnv != "" {
+		t.Errorf("SessionIDEnv = %q, want %q", rc.Session.SessionIDEnv, "")
 	}
 }
 
@@ -855,12 +855,12 @@ func TestRuntimeConfigBuildCommand(t *testing.T) {
 		{
 			name: "nil config uses defaults",
 			rc:   nil,
-			want: "claude --dangerously-skip-permissions",
+			want: "",
 		},
 		{
 			name: "default config",
 			rc:   DefaultRuntimeConfig(),
-			want: "claude --dangerously-skip-permissions",
+			want: "",
 		},
 		{
 			name: "custom command",
@@ -875,7 +875,7 @@ func TestRuntimeConfigBuildCommand(t *testing.T) {
 		{
 			name: "empty command uses default",
 			rc:   &RuntimeConfig{Command: "", Args: nil},
-			want: "claude --dangerously-skip-permissions",
+			want: "",
 		},
 	}
 
@@ -899,19 +899,19 @@ func TestRuntimeConfigBuildCommandWithPrompt(t *testing.T) {
 	}{
 		{
 			name:   "no prompt",
-			rc:     DefaultRuntimeConfig(),
+			rc:     &RuntimeConfig{Provider: "claude", Command: "claude", Args: []string{"--dangerously-skip-permissions"}},
 			prompt: "",
 			want:   "claude --dangerously-skip-permissions",
 		},
 		{
 			name:   "with prompt",
-			rc:     DefaultRuntimeConfig(),
+			rc:     &RuntimeConfig{Provider: "claude", Command: "claude", Args: []string{"--dangerously-skip-permissions"}},
 			prompt: "gt prime",
 			want:   `claude --dangerously-skip-permissions "gt prime"`,
 		},
 		{
 			name:   "prompt with quotes",
-			rc:     DefaultRuntimeConfig(),
+			rc:     &RuntimeConfig{Provider: "claude", Command: "claude", Args: []string{"--dangerously-skip-permissions"}},
 			prompt: `Hello "world"`,
 			want:   `claude --dangerously-skip-permissions "Hello \"world\""`,
 		},
@@ -954,9 +954,10 @@ func TestBuildAgentStartupCommand(t *testing.T) {
 
 	// Test without rig config (uses defaults)
 	// New signature: (role, rig, townRoot, rigPath, prompt)
+	// Note: With no default agent configured, the command will be empty
 	cmd := BuildAgentStartupCommand("witness", "gastown", "", "", "")
 
-	// Should contain environment exports and claude command
+	// Should contain environment exports
 	if !strings.Contains(cmd, "export") {
 		t.Error("expected export in command")
 	}
@@ -966,9 +967,9 @@ func TestBuildAgentStartupCommand(t *testing.T) {
 	if !strings.Contains(cmd, "BD_ACTOR=gastown/witness") {
 		t.Error("expected BD_ACTOR in command")
 	}
-	if !strings.Contains(cmd, "claude --dangerously-skip-permissions") {
-		t.Error("expected claude command in output")
-	}
+	// Note: Since we removed hardcoded claude fallback, without a configured
+	// default_agent in town settings, the runtime command will be empty
+	// This is intentional - it forces users to explicitly configure an agent
 }
 
 func TestBuildPolecatStartupCommand(t *testing.T) {
@@ -1495,8 +1496,8 @@ func TestLoadRuntimeConfigFallsBackToDefaults(t *testing.T) {
 	t.Parallel()
 	// Non-existent path should use defaults
 	rc := LoadRuntimeConfig("/nonexistent/path")
-	if rc.Command != "claude" {
-		t.Errorf("Command = %q, want %q (default)", rc.Command, "claude")
+	if rc.Command != "" {
+		t.Errorf("Command = %q, want %q (default)", rc.Command, "")
 	}
 }
 
@@ -1941,7 +1942,7 @@ func TestLookupAgentConfigWithRigSettings(t *testing.T) {
 			name:            "unknown-agent",
 			rigSettings:     nil,
 			townSettings:    nil,
-			expectedCommand: "claude",
+			expectedCommand: "",
 			expectedFrom:    "builtin",
 		},
 		{
