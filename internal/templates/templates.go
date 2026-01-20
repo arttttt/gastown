@@ -298,3 +298,26 @@ func MissingCommands(workspacePath string) ([]string, error) {
 
 	return missing, nil
 }
+
+// MissingCommandsOpenCode returns the list of embedded OpenCode commands missing from the workspace.
+func MissingCommandsOpenCode(workspacePath string) ([]string, error) {
+	entries, err := commandsFS.ReadDir("commands-opencode")
+	if err != nil {
+		return nil, fmt.Errorf("reading commands-opencode directory: %w", err)
+	}
+
+	commandsDir := filepath.Join(workspacePath, ".opencode", "commands")
+	var missing []string
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		destPath := filepath.Join(commandsDir, entry.Name())
+		if _, err := os.Stat(destPath); os.IsNotExist(err) {
+			missing = append(missing, entry.Name())
+		}
+	}
+
+	return missing, nil
+}
