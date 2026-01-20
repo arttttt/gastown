@@ -110,7 +110,7 @@ not by Go code. This follows the Zero Friction Control (ZFC) principle.
 ```bash
 # First, get target branch from MR bead: bd show <mr-id> → extract "target:" field
 git checkout -b temp origin/polecat/rictus-12345
-git rebase origin/<target>    # <target> from MR bead (main or integration/xxx)
+git rebase origin/<target>    # <target> from MR bead ({{ .DefaultBranch }} or integration/xxx)
 # If conflict:
 git status                    # See what conflicted
 # DECISION: Can I resolve it? Is it trivial?
@@ -303,20 +303,20 @@ bd mol spawn mol-refinery-patrol --wisp --assignee=refinery
 
 ```
 WRONG (parallel merge - causes conflicts):
-  main ─────────────────────────────┐
-    ├── branch-A (based on old main) ├── CONFLICTS
-    └── branch-B (based on old main) │
+  {{ .DefaultBranch }} ─────────────────────────────┐
+    ├── branch-A (based on old {{ .DefaultBranch }}) ├── CONFLICTS
+    └── branch-B (based on old {{ .DefaultBranch }}) │
 
 RIGHT (sequential rebase):
-  main ──────┬────────┬─────▶ (clean history)
-             │        │
-        merge A   merge B
-             │        │
-        A rebased  B rebased
-        on main    on main+A
-```
+  {{ .DefaultBranch }} ──────┬────────┬─────▶ (clean history)
+                         │        │
+                    merge A   merge B
+                         │        │
+                    A rebased  B rebased
+                    on {{ .DefaultBranch }}    on {{ .DefaultBranch }}+A
+ ```
 
-**After every merge, main moves. Next branch MUST rebase on new baseline.**
+**After every merge, {{ .DefaultBranch }} moves. Next branch MUST rebase on new baseline.**
 
 ## Conflict Handling
 
@@ -330,7 +330,7 @@ git rebase --continue
 # If too messy, abort and notify worker
 git rebase --abort
 gt mail send {{ .RigName }}/<worker> -s "Rebase needed" \
-  -m "Your branch conflicts with main. Please rebase and resubmit."
+  -m "Your branch conflicts with {{ .DefaultBranch }}. Please rebase and resubmit."
 ```
 
 ## Key Commands
@@ -342,8 +342,11 @@ gt mail send {{ .RigName }}/<worker> -s "Rebase needed" \
 
 ### Git Operations
 - `git fetch origin` - Fetch all remote branches
-- `git rebase origin/<target>` - Rebase on target branch (from MR bead, not always main!)
+- `git rebase origin/<target>` - Rebase on target branch (from MR bead, not always {{ .DefaultBranch }}!)
+- `git rebase origin/{{ .DefaultBranch }}` - Rebase on default branch
 - `git push origin <target>` - Push to target branch
+- `git checkout {{ .DefaultBranch }}` - Checkout default branch
+- `git push origin {{ .DefaultBranch }}` - Push to default branch
 
 **IMPORTANT**: The merge queue source of truth is `gt mq list {{ .RigName }}`, NOT git branches.
 Do NOT use `git branch -r | grep polecat` or `git ls-remote | grep polecat` to check for work.
