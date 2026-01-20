@@ -255,7 +255,40 @@ func provisionCommandsTo(workspacePath, targetDir, sourceDir string) error {
 
 // CommandNames returns the list of embedded slash commands.
 func CommandNames() ([]string, error) {
-	entries, err := commandsFS.ReadDir("commands")
+	return commandNamesFor("commands")
+}
+
+// CommandNamesOpenCode returns the list of embedded OpenCode slash commands.
+func CommandNamesOpenCode() ([]string, error) {
+	return commandNamesFor("commands-opencode")
+}
+
+// HasCommands checks if a workspace has the .claude/commands/ directory provisioned.
+func HasCommands(workspacePath string) bool {
+	commandsDir := filepath.Join(workspacePath, ".claude", "commands")
+	info, err := os.Stat(commandsDir)
+	return err == nil && info.IsDir()
+}
+
+// HasCommandsOpenCode checks if a workspace has the .opencode/commands/ directory provisioned.
+func HasCommandsOpenCode(workspacePath string) bool {
+	commandsDir := filepath.Join(workspacePath, ".opencode", "commands")
+	info, err := os.Stat(commandsDir)
+	return err == nil && info.IsDir()
+}
+
+// MissingCommands returns the list of embedded commands missing from the workspace.
+func MissingCommands(workspacePath string) ([]string, error) {
+	return missingCommandsFor(workspacePath, "commands", ".claude")
+}
+
+// MissingCommandsOpenCode returns the list of embedded OpenCode commands missing from the workspace.
+func MissingCommandsOpenCode(workspacePath string) ([]string, error) {
+	return missingCommandsFor(workspacePath, "commands-opencode", ".opencode")
+}
+
+func commandNamesFor(sourceDir string) ([]string, error) {
+	entries, err := commandsFS.ReadDir(sourceDir)
 	if err != nil {
 		return nil, fmt.Errorf("reading commands directory: %w", err)
 	}
@@ -269,21 +302,13 @@ func CommandNames() ([]string, error) {
 	return names, nil
 }
 
-// HasCommands checks if a workspace has the .claude/commands/ directory provisioned.
-func HasCommands(workspacePath string) bool {
-	commandsDir := filepath.Join(workspacePath, ".claude", "commands")
-	info, err := os.Stat(commandsDir)
-	return err == nil && info.IsDir()
-}
-
-// MissingCommands returns the list of embedded commands missing from the workspace.
-func MissingCommands(workspacePath string) ([]string, error) {
-	entries, err := commandsFS.ReadDir("commands")
+func missingCommandsFor(workspacePath, sourceDir, targetDir string) ([]string, error) {
+	entries, err := commandsFS.ReadDir(sourceDir)
 	if err != nil {
 		return nil, fmt.Errorf("reading commands directory: %w", err)
 	}
 
-	commandsDir := filepath.Join(workspacePath, ".claude", "commands")
+	commandsDir := filepath.Join(workspacePath, targetDir, "commands")
 	var missing []string
 
 	for _, entry := range entries {
