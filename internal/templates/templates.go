@@ -13,7 +13,7 @@ import (
 //go:embed roles/*.md.tmpl messages/*.md.tmpl
 var templateFS embed.FS
 
-//go:embed commands/*.md
+//go:embed commands/*.md commands-opencode/*.md
 var commandsFS embed.FS
 
 // Templates manages role and message templates.
@@ -24,18 +24,18 @@ type Templates struct {
 
 // RoleData contains information for rendering role contexts.
 type RoleData struct {
-	Role           string   // mayor, witness, refinery, polecat, crew, deacon
-	RigName        string   // e.g., "greenplace"
-	TownRoot       string   // e.g., "/Users/steve/ai"
-	TownName       string   // e.g., "ai" - the town identifier for session names
-	WorkDir        string   // current working directory
-	DefaultBranch  string   // default branch for merges (e.g., "main", "develop")
-	Polecat        string   // polecat name (for polecat role)
-	Polecats       []string // list of polecats (for witness role)
-	BeadsDir       string   // BEADS_DIR path
-	IssuePrefix    string   // beads issue prefix
-	MayorSession   string   // e.g., "gt-ai-mayor" - dynamic mayor session name
-	DeaconSession  string   // e.g., "gt-ai-deacon" - dynamic deacon session name
+	Role          string   // mayor, witness, refinery, polecat, crew, deacon
+	RigName       string   // e.g., "greenplace"
+	TownRoot      string   // e.g., "/Users/steve/ai"
+	TownName      string   // e.g., "ai" - the town identifier for session names
+	WorkDir       string   // current working directory
+	DefaultBranch string   // default branch for merges (e.g., "main", "develop")
+	Polecat       string   // polecat name (for polecat role)
+	Polecats      []string // list of polecats (for witness role)
+	BeadsDir      string   // BEADS_DIR path
+	IssuePrefix   string   // beads issue prefix
+	MayorSession  string   // e.g., "gt-ai-mayor" - dynamic mayor session name
+	DeaconSession string   // e.g., "gt-ai-deacon" - dynamic deacon session name
 }
 
 // SpawnData contains information for spawn assignment messages.
@@ -206,36 +206,41 @@ func GetAllRoleTemplates() (map[string][]byte, error) {
 // even if the source repo doesn't have them tracked.
 // If a command already exists, it is skipped (no overwrite).
 func ProvisionCommands(workspacePath string) error {
-	entries, err := commandsFS.ReadDir("commands")
-	if err != nil {
-		return fmt.Errorf("reading commands directory: %w", err)
-	}
-
 	// Create .claude/commands/ directory
 	commandsDir := filepath.Join(workspacePath, ".claude", "commands")
 	if err := os.MkdirAll(commandsDir, 0755); err != nil {
 		return fmt.Errorf("creating commands directory: %w", err)
 	}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
+	// Read from both commands/ and commands-opencode/ directories
+	dirs := []string{"commands", "commands-opencode"}
 
-		destPath := filepath.Join(commandsDir, entry.Name())
-
-		// Skip if command already exists (don't overwrite user customizations)
-		if _, err := os.Stat(destPath); err == nil {
-			continue
-		}
-
-		content, err := commandsFS.ReadFile("commands/" + entry.Name())
+	for _, dir := range dirs {
+		entries, err := commandsFS.ReadDir(dir)
 		if err != nil {
-			return fmt.Errorf("reading %s: %w", entry.Name(), err)
+			return fmt.Errorf("reading commands directory %s: %w", dir, err)
 		}
 
-		if err := os.WriteFile(destPath, content, 0644); err != nil { //nolint:gosec // G306: template files are non-sensitive
-			return fmt.Errorf("writing %s: %w", entry.Name(), err)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			destPath := filepath.Join(commandsDir, entry.Name())
+
+			// Skip if command already exists (don't overwrite user customizations)
+			if _, err := os.Stat(destPath); err == nil {
+				continue
+			}
+
+			content, err := commandsFS.ReadFile(dir + "/" + entry.Name())
+			if err != nil {
+				return fmt.Errorf("reading %s/%s: %w", dir, entry.Name(), err)
+			}
+
+			if err := os.WriteFile(destPath, content, 0644); err != nil { //nolint:gosec // G306: template files are non-sensitive
+				return fmt.Errorf("writing %s: %w", entry.Name(), err)
+			}
 		}
 	}
 
