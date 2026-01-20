@@ -206,41 +206,47 @@ func GetAllRoleTemplates() (map[string][]byte, error) {
 // even if the source repo doesn't have them tracked.
 // If a command already exists, it is skipped (no overwrite).
 func ProvisionCommands(workspacePath string) error {
-	// Create .claude/commands/ directory
-	commandsDir := filepath.Join(workspacePath, ".claude", "commands")
+	return provisionCommandsTo(workspacePath, ".claude", "commands")
+}
+
+// ProvisionCommandsOpenCode creates the .opencode/commands/ directory with OpenCode-compatible
+// slash commands. Uses templates from commands-opencode/ which have proper YAML frontmatter.
+// If a command already exists, it is skipped (no overwrite).
+func ProvisionCommandsOpenCode(workspacePath string) error {
+	return provisionCommandsTo(workspacePath, ".opencode", "commands-opencode")
+}
+
+// provisionCommandsTo provisions commands from a source directory to a target directory.
+func provisionCommandsTo(workspacePath, targetDir, sourceDir string) error {
+	commandsDir := filepath.Join(workspacePath, targetDir, "commands")
 	if err := os.MkdirAll(commandsDir, 0755); err != nil {
 		return fmt.Errorf("creating commands directory: %w", err)
 	}
 
-	// Read from both commands/ and commands-opencode/ directories
-	dirs := []string{"commands", "commands-opencode"}
+	entries, err := commandsFS.ReadDir(sourceDir)
+	if err != nil {
+		return fmt.Errorf("reading commands directory %s: %w", sourceDir, err)
+	}
 
-	for _, dir := range dirs {
-		entries, err := commandsFS.ReadDir(dir)
-		if err != nil {
-			return fmt.Errorf("reading commands directory %s: %w", dir, err)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
 		}
 
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
+		destPath := filepath.Join(commandsDir, entry.Name())
 
-			destPath := filepath.Join(commandsDir, entry.Name())
+		// Skip if command already exists (don't overwrite user customizations)
+		if _, err := os.Stat(destPath); err == nil {
+			continue
+		}
 
-			// Skip if command already exists (don't overwrite user customizations)
-			if _, err := os.Stat(destPath); err == nil {
-				continue
-			}
+		content, err := commandsFS.ReadFile(sourceDir + "/" + entry.Name())
+		if err != nil {
+			return fmt.Errorf("reading %s/%s: %w", sourceDir, entry.Name(), err)
+		}
 
-			content, err := commandsFS.ReadFile(dir + "/" + entry.Name())
-			if err != nil {
-				return fmt.Errorf("reading %s/%s: %w", dir, entry.Name(), err)
-			}
-
-			if err := os.WriteFile(destPath, content, 0644); err != nil { //nolint:gosec // G306: template files are non-sensitive
-				return fmt.Errorf("writing %s: %w", entry.Name(), err)
-			}
+		if err := os.WriteFile(destPath, content, 0644); err != nil { //nolint:gosec // G306: template files are non-sensitive
+			return fmt.Errorf("writing %s: %w", entry.Name(), err)
 		}
 	}
 
