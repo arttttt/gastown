@@ -1,495 +1,254 @@
 description = """
 Merge queue processor patrol loop.
 
-The Refinery is the Engineer in the engine room. You process polecat branches, merging them to their target branch one at a time with sequential rebasing.
+The Refinery processes polecat branches, merging them to their target branch one at a time with sequential rebasing.
 
-**The Scotty Test**: Before proceeding past any failure, ask yourself: "Would Scotty walk past a warp core leak because it existed before his shift?"
+## Variable Tracking (WRITE THESE DOWN)
 
-## Variables (Per MR)
+| Variable | Set in step | Used in step | How to get |
+|----------|-------------|--------------|------------|
+| mr_id | queue-scan | close-mr, cleanup | `gt mq list` output |
+| branch | queue-scan | notify-witness, cleanup | `bd show <mr_id>` → branch field |
+| target | queue-scan | process-branch, merge-git | `bd show <mr_id>` → target field |
+| polecat_name | queue-scan | notify-witness | Extract from branch name |
+| source_issue | queue-scan | notify-witness | `bd show <mr_id>` → source_issue field |
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| mr_id | queue-scan | The MR bead ID being processed |
-| branch | MR description | Source branch (e.g., feature/hq-tg7wj.2) |
-| target | MR description | Destination branch (main or integration/xxx) |
-| source_issue | MR description | Original issue ID |
-
-**CRITICAL**: Before processing each MR, run `bd show <mr_id>` and extract the `target:`
-field from the description. Use this <target> instead of hardcoded "main" in ALL git commands.
+**CRITICAL**: Write down each variable when you get it. You WILL need them in later steps.
 
 ## Merge Flow
 
-The Refinery receives MERGE_READY mail from Witnesses when polecats complete work:
-
 ```
-Witness                    Refinery                      Git
-   │                          │                           │
-   │ MERGE_READY              │                           │
-   │─────────────────────────>│                           │
-   │                          │                           │
-   │                    (verify branch)                   │
-   │                          │ fetch & rebase            │
-   │                          │──────────────────────────>│
-   │                          │                           │
-   │                    (run tests)                       │
-   │                          │                           │
-   │                    (if pass)                         │
-   │                          │ merge & push              │
-   │                          │──────────────────────────>│
-   │                          │                           │
-   │ MERGED                   │                           │
-   │<─────────────────────────│                           │
-   │                          │                           │
+Witness → MERGE_READY → Refinery → rebase → test → merge → MERGED → Witness
 ```
 
-After successful merge, Refinery sends MERGED mail back to Witness so it can
-complete cleanup (nuke the polecat worktree)."""
+After successful merge, Refinery sends MERGED mail back to Witness for cleanup."""
 formula = "mol-refinery-patrol"
-version = 4
+version = 5
 
 [[steps]]
 id = "inbox-check"
 title = "Check refinery mail"
 description = """
-Check mail for MERGE_READY submissions, escalations, and messages.
+Check mail for messages.
 
 ```bash
 gt mail inbox
 ```
 
-For each message:
+For each message type:
 
-**MERGE_READY**:
-A polecat's work is ready for merge. Extract details and track for processing.
+**MERGE_READY**: Mark as read. Work will be processed via MQ.
 
-```bash
-# Parse MERGE_READY message body:
-# Branch: <branch>
-# Issue: <issue-id>
-# Polecat: <polecat-name>
-# MR: <mr-bead-id>
-# Verified: clean git state, issue closed
-
-# Track in your merge queue for this patrol cycle:
-# - Branch name
-# - Issue ID
-# - Polecat name (REQUIRED for MERGED notification)
-# - MR bead ID (REQUIRED for closing after merge)
-```
-
-**IMPORTANT**: You MUST track the polecat name, MR bead ID, AND message ID - you will need them
-in merge-push step to send MERGED notification, close the MR bead, and archive the mail.
-
-Mark as read. The work will be processed in queue-scan/process-branch.
-**Do NOT archive yet** - archive after merge/reject decision in merge-push step.
-
-**PATROL: Wake up**:
-Witness detected MRs waiting but refinery idle. Acknowledge and archive:
+**PATROL: Wake up**: Archive it:
 ```bash
 gt mail archive <message-id>
 ```
 
-**HELP / Blocked**:
-Assess and respond. If you can't help, escalate to Mayor.
-Archive after handling:
-```bash
-gt mail archive <message-id>
-```
+**HANDOFF**: Read context, then archive.
 
-**HANDOFF**:
-Read predecessor context. Check for in-flight merges.
-Archive after absorbing context:
-```bash
-gt mail archive <message-id>
-```
-
-**Hygiene principle**: Archive messages after they're fully processed.
-Keep only: pending MRs in queue. Inbox should be near-empty."""
+**HELP/Blocked**: Respond or escalate to Mayor, then archive."""
 
 [[steps]]
 id = "queue-scan"
 title = "Scan merge queue"
 needs = ["inbox-check"]
 description = """
-Check the beads merge queue - this is the SOURCE OF TRUTH for pending merges.
+Get pending merges from MQ (source of truth).
 
 ```bash
 git fetch --prune origin
-gt mq list <rig>
+gt mq list gastown
 ```
 
-The beads MQ tracks all pending merge requests. Do NOT rely on `git branch -r | grep polecat`
-as branches may exist without MR beads, or MR beads may exist for already-merged work.
+If queue empty → skip to context-check.
 
-If queue empty, skip to context-check step.
+For each MR in queue:
 
-For each MR in the queue, verify the branch still exists:
+1. Get MR details and **WRITE DOWN** these variables:
+```bash
+bd show <mr-id>
+```
+Extract from output:
+- mr_id: the MR bead ID
+- branch: the polecat branch name
+- target: destination branch (main or integration/xxx)
+- source_issue: original issue ID
+- polecat_name: extract from branch (e.g., "furiosa" from "polecat/furiosa/...")
+
+2. Verify branch exists:
 ```bash
 git branch -r | grep <branch>
 ```
-
-If branch doesn't exist for a queued MR:
-- Close the MR bead: `bd close <mr-id> --reason "Branch no longer exists"`
-- Remove from processing queue
-
-**IMPORTANT**: For each MR, extract the target branch:
-```bash
-bd show <mr-id>
-# Parse "target: <value>" from description
-# This is the branch to rebase onto and merge into (may be "main" or "integration/xxx")
-```
-
-Track verified MR list for this cycle, including the target branch for each."""
+If branch missing → `bd close <mr-id> --reason "Branch no longer exists"`"""
 
 [[steps]]
 id = "process-branch"
-title = "Mechanical rebase"
+title = "Rebase on target"
 needs = ["queue-scan"]
 description = """
-Pick next branch from queue. Attempt mechanical rebase on the TARGET branch (from MR bead).
+Rebase polecat branch on target.
 
-**Step 0: Get target branch from MR bead**
 ```bash
-bd show <mr-id>
-# Extract "target: <value>" - this is <target> (e.g., "main" or "integration/hq-xxx")
+git checkout -b temp origin/<branch>
+git rebase origin/<target>
 ```
 
-**Step 1: Checkout and attempt rebase onto TARGET**
+If rebase succeeds (exit 0) → continue to run-tests.
+
+If rebase fails (conflicts):
+1. Abort: `git rebase --abort`
+2. Create task:
 ```bash
-git checkout -b temp origin/<polecat-branch>
-git rebase origin/<target>   # Use target from MR bead, NOT hardcoded "main"!
+bd create --type=task --priority=1 --title="Resolve conflicts: <source_issue>"
 ```
-
-**Step 2: Check rebase result**
-
-The rebase exits with:
-- Exit code 0: Success - proceed to run-tests
-- Exit code 1 (conflicts): Conflict detected - proceed to Step 3
-
-To detect conflict state after rebase fails:
-```bash
-# Check if we're in a conflicted rebase state
-ls .git/rebase-merge 2>/dev/null && echo "CONFLICT_STATE"
-```
-
-**Step 3: Handle conflicts (if any)**
-
-If rebase SUCCEEDED (exit code 0):
-- Skip to run-tests step (continue normal merge flow)
-
-If rebase FAILED with conflicts:
-
-1. **Abort the rebase** (DO NOT leave repo in conflicted state):
-```bash
-git rebase --abort
-```
-
-2. **Record conflict metadata**:
-```bash
-# Capture target SHA for reference
-TARGET_SHA=$(git rev-parse origin/<target>)
-BRANCH_SHA=$(git rev-parse origin/<polecat-branch>)
-```
-
-3. **Create conflict-resolution task**:
-```bash
-bd create --type=task --priority=1 \
-  --title="Resolve merge conflicts: <original-issue-title>" \
-  --description="## Conflict Resolution Required
-
-Original MR: <mr-bead-id>
-Branch: <polecat-branch>
-Original Issue: <issue-id>
-Target: <target>
-Conflict with <target> at: ${TARGET_SHA}
-Branch SHA: ${BRANCH_SHA}
-
-## Instructions
-1. Clone/checkout the branch
-2. Rebase on target: git rebase origin/<target>
-3. Resolve conflicts
-4. Force push: git push -f origin <branch>
-5. Close this task when done
-
-The MR will be re-queued for processing after conflicts are resolved."
-```
-
-4. **Skip this MR** (do NOT delete branch or close MR bead):
-- Leave branch intact for conflict resolution
-- Leave MR bead open (will be re-processed after resolution)
-- Continue to loop-check for next branch
-
-**CRITICAL**: Never delete a branch that has conflicts. The branch contains
-the original work and must be preserved for conflict resolution.
-
-Track: rebase result (success/conflict), conflict task ID if created."""
+3. Skip to loop-check (do NOT close MR, do NOT delete branch)."""
 
 [[steps]]
 id = "run-tests"
-title = "Run test suite"
+title = "Run tests"
 needs = ["process-branch"]
 description = """
-Run the test suite.
+Run test suite.
 
 ```bash
 go test ./...
 ```
 
-Track results: pass count, fail count, specific failures."""
+Track: pass/fail count."""
 
 [[steps]]
 id = "handle-failures"
 title = "Handle test failures"
 needs = ["run-tests"]
 description = """
-**VERIFICATION GATE**: This step enforces the Beads Promise.
-
-If tests PASSED: This step auto-completes. Proceed to merge.
+If tests PASSED → continue to merge-git.
 
 If tests FAILED:
-1. Diagnose: Is this a branch regression or pre-existing on main?
-2. If branch caused it:
-   - Abort merge
-   - Notify polecat: "Tests failing. Please fix and resubmit."
-   - Skip to loop-check
-3. If pre-existing on main:
-   - Option A: Fix it yourself (you're the Engineer!)
-   - Option B: File a bead: bd create --type=bug --priority=1 --title="..."
-
-**GATE REQUIREMENT**: You CANNOT proceed to merge-push without:
-- Tests passing, OR
-- Fix committed, OR
-- Bead filed for the failure
-
-This is non-negotiable. Never disavow. Never "note and proceed." """
-
-[[steps]]
-id = "merge-push"
-title = "Merge and push to target"
-needs = ["handle-failures"]
-description = """
-Merge to TARGET branch and push. CRITICAL: Notifications come IMMEDIATELY after push.
-
-**Step 1: Merge and Push to TARGET**
+1. Check if branch caused it or pre-existing on target
+2. If branch caused → notify polecat, skip to loop-check
+3. If pre-existing → fix it OR file bead:
 ```bash
-git checkout <target>         # Use target from MR bead (main or integration/xxx)
-git merge --ff-only temp
-git push origin <target>      # Push to the correct target branch
+bd create --type=bug --priority=1 --title="Test failure: <description>"
 ```
 
-⚠️ **STOP HERE - DO NOT PROCEED UNTIL STEPS 2-3 COMPLETE**
+**GATE**: Cannot proceed without tests passing OR bead filed."""
 
-**Step 2: Send MERGED Notification (REQUIRED - DO THIS IMMEDIATELY)**
-
-RIGHT NOW, before any cleanup, send MERGED mail to Witness:
+[[steps]]
+id = "merge-git"
+title = "Merge and push"
+needs = ["handle-failures"]
+description = """
+Merge temp branch to target and push.
 
 ```bash
-gt mail send <rig>/witness -s "MERGED <polecat-name>" -m "Branch: <branch>
-Issue: <issue-id>
+git checkout <target>
+git merge --ff-only temp
+git push origin <target>
+```
+
+If push succeeds → IMMEDIATELY continue to notify-witness.
+Do NOT stop here. Do NOT skip notification steps."""
+
+[[steps]]
+id = "notify-witness"
+title = "Send MERGED notification"
+needs = ["merge-git"]
+description = """
+Send MERGED notification to witness. This is REQUIRED.
+
+```bash
+gt mail send gastown/witness -s "MERGED <polecat_name>" -m "Branch: <branch>
+Issue: <source_issue>
 Merged-At: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
-This signals the Witness to nuke the polecat worktree. WITHOUT THIS NOTIFICATION,
-POLECAT WORKTREES ACCUMULATE INDEFINITELY AND THE LIFECYCLE BREAKS.
+Without this notification, polecat worktrees accumulate forever.
 
-**Step 3: Close MR Bead (REQUIRED - DO THIS IMMEDIATELY)**
+After sending → IMMEDIATELY continue to close-mr."""
 
-⚠️ **VERIFICATION BEFORE CLOSING**: Confirm the work is actually on target:
+[[steps]]
+id = "close-mr"
+title = "Close MR bead"
+needs = ["notify-witness"]
+description = """
+Close the MR bead. This is REQUIRED.
+
+First verify merge landed:
 ```bash
-# Get the commit message/issue from the branch
-git log origin/<target> --oneline | grep "<issue-id>"
-# OR verify the commit SHA is on target:
-git branch --contains <commit-sha> | grep <target>
+git log origin/<target> --oneline -5 | grep "<source_issue>"
 ```
 
-If work is NOT on target, DO NOT close the MR bead. Investigate first.
-
+If verified, close:
 ```bash
-bd close <mr-bead-id> --reason "Merged to <target> at $(git rev-parse --short HEAD)"
+bd close <mr_id> --reason "Merged to <target>"
 ```
 
-The MR bead ID was in the MERGE_READY message or find via:
-```bash
-bd list --type=merge-request --status=open | grep <polecat-name>
-```
+After closing → continue to cleanup."""
 
-**VALIDATION**: The MR bead's source_issue should be a valid bead ID (gt-xxxxx),
-not a branch name. If source_issue contains a branch name, flag for investigation.
+[[steps]]
+id = "cleanup"
+title = "Delete branches"
+needs = ["close-mr"]
+description = """
+Clean up temporary and remote branches.
 
-**Step 4: Archive the MERGE_READY mail (REQUIRED)**
-```bash
-gt mail archive <merge-ready-message-id>
-```
-The message ID was tracked when you processed inbox-check.
-
-**Step 5: Cleanup (only after Steps 2-4 confirmed)**
 ```bash
 git branch -d temp
-git push origin --delete <polecat-branch>
+git push origin --delete <branch>
 ```
 
-**VERIFICATION GATE**: You CANNOT proceed to loop-check without:
-- [x] MERGED mail sent to witness
-- [x] MR bead closed
-- [x] MERGE_READY mail archived
-
-If you skipped notifications or archiving, GO BACK AND DO THEM NOW.
-
-Target branch has moved. Any remaining branches targeting the same branch need rebasing on new baseline."""
+After cleanup → continue to loop-check."""
 
 [[steps]]
 id = "loop-check"
 title = "Check for more work"
-needs = ["merge-push"]
+needs = ["cleanup"]
 description = """
-More branches to process?
+More MRs in queue?
 
-**Entry paths:**
-- Normal: After successful merge-push
-- Conflict-skip: After process-branch created conflict-resolution task
+If yes → return to process-branch with next MR.
+If no → continue to generate-summary.
 
-If yes: Return to process-branch with next branch.
-If no: Continue to generate-summary.
-
-**Track for this cycle:**
-- branches_merged: count and names of successfully merged branches
-- branches_conflict: count and names of branches skipped due to conflicts
-- conflict_tasks: IDs of conflict-resolution tasks created
-
-This tracking feeds into generate-summary for the patrol digest."""
+Track for summary:
+- branches_merged: count
+- branches_conflict: count
+- conflict_tasks: IDs created"""
 
 [[steps]]
 id = "generate-summary"
-title = "Generate handoff summary"
+title = "Generate summary"
 needs = ["loop-check"]
 description = """
-Summarize this patrol cycle.
+Summarize patrol cycle.
 
-**VERIFICATION**: Before generating summary, confirm for each merged branch:
-- [ ] MERGED mail was sent to witness
-- [ ] MR bead was closed
-- [ ] MERGE_READY mail archived
-
-If any notifications or archiving were missed, do them now!
-
-Include in summary:
-- Branches merged (count, names)
-- MERGED mails sent (count - should match branches merged)
-- MR beads closed (count - should match branches merged)
-- MERGE_READY mails archived (count - should match branches merged)
-- Test results (pass/fail)
-- Branches with conflicts (count, names)
-- Conflict-resolution tasks created (IDs)
-- Issues filed (if any)
-- Any escalations sent
-
-**Conflict tracking is important** for monitoring MQ health. If many branches
-conflict, it may indicate main is moving too fast or branches are too stale.
-
-This becomes the digest when the patrol is squashed."""
+Include:
+- Branches merged (count)
+- MERGED mails sent (should match merged count)
+- MR beads closed (should match merged count)
+- Branches with conflicts
+- Test results"""
 
 [[steps]]
 id = "context-check"
-title = "Check own context limit"
+title = "Check context"
 needs = ["generate-summary"]
 description = """
-Check own context usage.
+Check context usage.
 
-If context is HIGH (>80%):
-- Write handoff summary
-- Prepare for burn/respawn
-
-If context is LOW:
-- Can continue processing"""
-
-[[steps]]
-id = "patrol-cleanup"
-title = "End-of-cycle inbox hygiene"
-needs = ["context-check"]
-description = """
-Verify inbox hygiene before ending patrol cycle.
-
-**Step 1: Check inbox state**
-```bash
-gt mail inbox
-```
-
-Inbox should contain ONLY:
-- Unprocessed MERGE_READY messages (will process next cycle)
-- Active work items
-
-**Step 2: Archive any stale messages**
-
-Look for messages that were processed but not archived:
-- PATROL: Wake up that was acknowledged → archive
-- HELP/Blocked that was handled → archive
-- MERGE_READY where merge completed but archive was missed → archive
-
-```bash
-# For each stale message found:
-gt mail archive <message-id>
-```
-
-**Step 3: Check for orphaned MR beads**
-
-Look for open MR beads with no corresponding branch:
-```bash
-bd list --type=merge-request --status=open
-```
-
-For each open MR bead:
-1. Check if branch exists: `git ls-remote origin refs/heads/<branch>`
-2. If branch gone, verify work is on main: `git log origin/main --oneline | grep "<source_issue>"`
-3. If work on main → close MR with reason "Merged (verified on main)"
-4. If work NOT on main → investigate before closing:
-   - Check source_issue validity (should be gt-xxxxx, not branch name)
-   - Search reflog/dangling commits if possible
-   - If unverifiable, close with reason "Unverifiable - no audit trail"
-   - File bead if this indicates lost work
-
-**NEVER close an MR bead without verifying the work landed or is unrecoverable.**
-
-**Goal**: Inbox should have ≤3 active messages at end of cycle.
-Keep only: pending MRs in queue."""
+If HIGH (>80%) → prepare for handoff.
+If LOW → can continue."""
 
 [[steps]]
 id = "burn-or-loop"
-title = "Burn and respawn or loop"
-needs = ["patrol-cleanup"]
+title = "End patrol"
+needs = ["context-check"]
 description = """
-End of patrol cycle decision.
+End patrol cycle.
 
-**Step 1: Estimate remaining context**
-
-Ask yourself:
-- Have I processed many branches this cycle?
-- Is the conversation getting long?
-- Am I starting to lose track of earlier context?
-
-Rule of thumb: If you've done 3+ merges or processed significant cleanup work,
-it's time for a fresh session.
-
-**Step 2: Decision tree**
-
-If queue non-empty AND context LOW:
-- Squash this wisp to digest
-- Spawn fresh patrol wisp
-- Return to inbox-check
-
-If queue empty OR context HIGH OR good stopping point:
-- Squash wisp with summary digest
-- Use `gt handoff` for clean session transition:
-
+If queue empty OR context HIGH:
 ```bash
-gt handoff -s "Patrol complete" -m "Merged X branches, Y tests passed.
-Queue: empty/N remaining
-Next: [any notes for successor]"
+gt handoff -s "Patrol complete" -m "Merged N branches.
+Queue: empty/N remaining"
 ```
 
-**Why gt handoff?**
-- Sends handoff mail to yourself with context
-- Respawns with fresh Claude instance
-- SessionStart hook runs gt prime
-- Successor picks up from your hook
-
-**DO NOT just exit.** Always use `gt handoff` for proper lifecycle."""
+If queue has work AND context LOW → spawn new patrol wisp."""
