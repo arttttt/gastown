@@ -145,27 +145,27 @@ func TestRenderRole_Refinery_DefaultBranch(t *testing.T) {
 		t.Fatalf("RenderRole() error = %v", err)
 	}
 
-	// Check that the custom default branch is used in git commands
-	if !strings.Contains(output, "origin/develop") {
-		t.Error("output missing 'origin/develop' - DefaultBranch not being used for rebase")
+	// Check that template uses <target> for dynamic branch support (integration branches)
+	if !strings.Contains(output, "origin/<target>") {
+		t.Error("output missing 'origin/<target>' - template should use dynamic target for rebase")
 	}
-	if !strings.Contains(output, "git checkout develop") {
-		t.Error("output missing 'git checkout develop' - DefaultBranch not being used for checkout")
+	if !strings.Contains(output, "git checkout <target>") {
+		t.Error("output missing 'git checkout <target>' - template should use dynamic target for checkout")
 	}
-	if !strings.Contains(output, "git push origin develop") {
-		t.Error("output missing 'git push origin develop' - DefaultBranch not being used for push")
+	if !strings.Contains(output, "git push origin <target>") {
+		t.Error("output missing 'git push origin <target>' - template should use dynamic target for push")
 	}
 
 	// Verify it does NOT contain hardcoded "main" in git commands
 	// (main may appear in other contexts like "main branch" descriptions, so we check specific patterns)
 	if strings.Contains(output, "git rebase origin/main") {
-		t.Error("output still contains hardcoded 'git rebase origin/main' - should use DefaultBranch")
+		t.Error("output still contains hardcoded 'git rebase origin/main' - should use <target>")
 	}
 	if strings.Contains(output, "git checkout main") {
-		t.Error("output still contains hardcoded 'git checkout main' - should use DefaultBranch")
+		t.Error("output still contains hardcoded 'git checkout main' - should use <target>")
 	}
 	if strings.Contains(output, "git push origin main") {
-		t.Error("output still contains hardcoded 'git push origin main' - should use DefaultBranch")
+		t.Error("output still contains hardcoded 'git push origin main' - should use <target>")
 	}
 }
 
