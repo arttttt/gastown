@@ -189,6 +189,7 @@ func runSling(cmd *cobra.Command, args []string) error {
 	var targetAgent string
 	var targetPane string
 	var hookWorkDir string // Working directory for running bd hook commands
+	var targetProvider string
 
 	if len(args) > 1 {
 		target := args[1]
@@ -245,6 +246,7 @@ func runSling(cmd *cobra.Command, args []string) error {
 				targetAgent = spawnInfo.AgentID()
 				targetPane = spawnInfo.Pane
 				hookWorkDir = spawnInfo.ClonePath // Run bd commands from polecat's worktree
+				targetProvider = spawnInfo.Provider
 
 				// Wake witness and refinery to monitor the new polecat
 				wakeRigAgents(rigName)
@@ -276,6 +278,7 @@ func runSling(cmd *cobra.Command, args []string) error {
 						targetAgent = spawnInfo.AgentID()
 						targetPane = spawnInfo.Pane
 						hookWorkDir = spawnInfo.ClonePath
+						targetProvider = spawnInfo.Provider
 
 						// Wake witness and refinery to monitor the new polecat
 						wakeRigAgents(rigName)
@@ -518,7 +521,11 @@ func runSling(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		if err := injectStartPrompt(targetPane, beadID, slingSubject, slingArgs); err != nil {
+		provider := targetProvider
+		if provider == "" {
+			provider = resolveProviderForSession(townRoot, sessionName)
+		}
+		if err := injectStartPrompt(targetPane, beadID, slingSubject, slingArgs, provider); err != nil {
 			// Graceful fallback for no-tmux mode
 			fmt.Printf("%s Could not nudge (no tmux?): %v\n", style.Dim.Render("○"), err)
 			fmt.Printf("  Agent will discover work via gt prime / bd show\n")
