@@ -172,7 +172,6 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	d.Register(doctor.NewCrewStateCheck())
 	d.Register(doctor.NewCrewWorktreeCheck())
 	d.Register(doctor.NewCommandsCheck())
-	d.Register(doctor.NewCommandsOpenCodeCheck())
 
 	// Lifecycle hygiene checks
 	d.Register(doctor.NewLifecycleHygieneCheck())
