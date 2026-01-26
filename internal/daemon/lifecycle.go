@@ -409,19 +409,6 @@ func (d *Daemon) restartSession(sessionName, identity string) error {
 	// Wait for beacon to be fully processed (needs to be separate prompt)
 	time.Sleep(2 * time.Second)
 
-	// For OpenCode: send [GT_AGENT_INIT] first for plugin to inject gt prime context.
-	// This ensures agents have full context BEFORE being told to run gt hook.
-	// Applies to ALL agents: mayor, deacon, witness, refinery, polecat, crew.
-	rigPath := ""
-	if parsed.RigName != "" {
-		rigPath = filepath.Join(d.config.TownRoot, parsed.RigName)
-	}
-	runtimeCfg := gtconfig.ResolveRoleAgentConfig(parsed.RoleType, d.config.TownRoot, rigPath)
-	if runtimeCfg.Provider == "opencode" {
-		_ = d.tmux.NudgeSession(sessionName, "[GT_AGENT_INIT]")
-		time.Sleep(3 * time.Second) // Wait for plugin to process and inject context
-	}
-
 	_ = d.tmux.NudgeSession(sessionName, session.PropulsionNudgeForRole(parsed.RoleType, workDir)) // Non-fatal
 
 	return nil
