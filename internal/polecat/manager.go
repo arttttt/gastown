@@ -786,17 +786,6 @@ func (m *Manager) RepairWorktreeWithOptions(name string, force bool, opts AddOpt
 		}
 	}
 
-	// Remove the old worktree (use force for git worktree removal)
-	if err := repoGit.WorktreeRemove(oldClonePath, true); err != nil {
-		// Fall back to direct removal
-		if removeErr := os.RemoveAll(oldClonePath); removeErr != nil {
-			return nil, fmt.Errorf("removing old clone path: %w", removeErr)
-		}
-	}
-
-	// Prune stale worktree entries (non-fatal: cleanup only)
-	_ = repoGit.WorktreePrune()
-
 	// Fetch latest from origin to ensure we have fresh commits (non-fatal: may be offline)
 	_ = repoGit.Fetch("origin")
 
@@ -813,12 +802,32 @@ func (m *Manager) RepairWorktreeWithOptions(name string, force bool, opts AddOpt
 	}
 	startPoint := fmt.Sprintf("origin/%s", defaultBranch)
 
-	// Create fresh worktree with unique branch name, starting from origin's default branch
-	// Old branches are left behind - they're ephemeral (never pushed to origin)
-	// and will be cleaned up by garbage collection
+	// Create fresh worktree to a temporary path first, so we can roll back if it fails.
+	// This prevents destroying the old worktree before the new one is confirmed working.
 	branchName := m.buildBranchName(name, opts.HookBead)
-	if err := repoGit.WorktreeAddFromRef(newClonePath, branchName, startPoint); err != nil {
+	tmpClonePath := newClonePath + ".repair-tmp"
+	_ = os.RemoveAll(tmpClonePath) // clean up any leftover temp dir
+	if err := repoGit.WorktreeAddFromRef(tmpClonePath, branchName, startPoint); err != nil {
 		return nil, fmt.Errorf("creating fresh worktree from %s: %w", startPoint, err)
+	}
+
+	// New worktree created successfully — now safe to remove the old one
+	if err := repoGit.WorktreeRemove(oldClonePath, true); err != nil {
+		// Fall back to direct removal
+		if removeErr := os.RemoveAll(oldClonePath); removeErr != nil {
+			// Clean up temp worktree before returning
+			_ = repoGit.WorktreeRemove(tmpClonePath, true)
+			_ = os.RemoveAll(tmpClonePath)
+			return nil, fmt.Errorf("removing old clone path: %w", removeErr)
+		}
+	}
+
+	// Prune stale worktree entries (non-fatal: cleanup only)
+	_ = repoGit.WorktreePrune()
+
+	// Move temp worktree to final location
+	if err := os.Rename(tmpClonePath, newClonePath); err != nil {
+		return nil, fmt.Errorf("moving repaired worktree to final path: %w", err)
 	}
 
 	// Ensure AGENTS.md exists - critical for polecats to "land the plane"
