@@ -403,69 +403,69 @@ func (b *Beads) ClearHookBead(agentBeadID string) error {
 	return nil
 }
 
-// UpdateAgentCleanupStatus updates the cleanup_status field in an agent bead.
-// This is called by the polecat to self-report its git state (ZFC compliance).
-// Valid statuses: clean, has_uncommitted, has_stash, has_unpushed
-func (b *Beads) UpdateAgentCleanupStatus(id string, cleanupStatus string) error {
-	// First get current issue to preserve other fields
+// AgentFieldUpdates specifies which agent description fields to update.
+// Only non-nil fields are modified; nil fields are left unchanged.
+// This allows multiple fields to be updated in a single read-modify-write
+// cycle, avoiding races where concurrent callers overwrite each other's changes.
+type AgentFieldUpdates struct {
+	CleanupStatus     *string
+	ActiveMR          *string
+	NotificationLevel *string
+}
+
+// UpdateAgentDescriptionFields atomically updates one or more agent description
+// fields in a single Show-Parse-Modify-Update cycle. This prevents the race
+// condition where concurrent callers updating different fields overwrite each
+// other because the entire description is replaced.
+func (b *Beads) UpdateAgentDescriptionFields(id string, updates AgentFieldUpdates) error {
+	// Validate notification level if provided
+	if updates.NotificationLevel != nil {
+		level := *updates.NotificationLevel
+		if level != "" && level != NotifyVerbose && level != NotifyNormal && level != NotifyMuted {
+			return fmt.Errorf("invalid notification level %q: must be verbose, normal, or muted", level)
+		}
+	}
+
 	issue, err := b.Show(id)
 	if err != nil {
 		return err
 	}
 
-	// Parse existing fields
 	fields := ParseAgentFields(issue.Description)
-	fields.CleanupStatus = cleanupStatus
 
-	// Format new description
+	if updates.CleanupStatus != nil {
+		fields.CleanupStatus = *updates.CleanupStatus
+	}
+	if updates.ActiveMR != nil {
+		fields.ActiveMR = *updates.ActiveMR
+	}
+	if updates.NotificationLevel != nil {
+		fields.NotificationLevel = *updates.NotificationLevel
+	}
+
 	description := FormatAgentDescription(issue.Title, fields)
-
 	return b.Update(id, UpdateOptions{Description: &description})
+}
+
+// UpdateAgentCleanupStatus updates the cleanup_status field in an agent bead.
+// This is called by the polecat to self-report its git state (ZFC compliance).
+// Valid statuses: clean, has_uncommitted, has_stash, has_unpushed
+func (b *Beads) UpdateAgentCleanupStatus(id string, cleanupStatus string) error {
+	return b.UpdateAgentDescriptionFields(id, AgentFieldUpdates{CleanupStatus: &cleanupStatus})
 }
 
 // UpdateAgentActiveMR updates the active_mr field in an agent bead.
 // This links the agent to their current merge request for traceability.
 // Pass empty string to clear the field (e.g., after merge completes).
 func (b *Beads) UpdateAgentActiveMR(id string, activeMR string) error {
-	// First get current issue to preserve other fields
-	issue, err := b.Show(id)
-	if err != nil {
-		return err
-	}
-
-	// Parse existing fields
-	fields := ParseAgentFields(issue.Description)
-	fields.ActiveMR = activeMR
-
-	// Format new description
-	description := FormatAgentDescription(issue.Title, fields)
-
-	return b.Update(id, UpdateOptions{Description: &description})
+	return b.UpdateAgentDescriptionFields(id, AgentFieldUpdates{ActiveMR: &activeMR})
 }
 
 // UpdateAgentNotificationLevel updates the notification_level field in an agent bead.
 // Valid levels: verbose, normal, muted (DND mode).
 // Pass empty string to reset to default (normal).
 func (b *Beads) UpdateAgentNotificationLevel(id string, level string) error {
-	// Validate level
-	if level != "" && level != NotifyVerbose && level != NotifyNormal && level != NotifyMuted {
-		return fmt.Errorf("invalid notification level %q: must be verbose, normal, or muted", level)
-	}
-
-	// First get current issue to preserve other fields
-	issue, err := b.Show(id)
-	if err != nil {
-		return err
-	}
-
-	// Parse existing fields
-	fields := ParseAgentFields(issue.Description)
-	fields.NotificationLevel = level
-
-	// Format new description
-	description := FormatAgentDescription(issue.Title, fields)
-
-	return b.Update(id, UpdateOptions{Description: &description})
+	return b.UpdateAgentDescriptionFields(id, AgentFieldUpdates{NotificationLevel: &level})
 }
 
 // GetAgentNotificationLevel returns the notification level for an agent.

@@ -174,9 +174,11 @@ func SetupRedirect(townRoot, worktreePath string) error {
 		return fmt.Errorf("invalid worktree path: must be at least 2 levels deep from town root")
 	}
 
-	// Safety check: prevent creating redirect in canonical beads location (mayor/rig)
-	// This would create a circular redirect chain since rig/.beads redirects to mayor/rig/.beads
-	if len(parts) >= 2 && parts[1] == "mayor" {
+	// Safety check: prevent creating redirect in canonical beads location (mayor/rig).
+	// This would create a circular redirect chain since rig/.beads redirects to mayor/rig/.beads.
+	// Check both parts[0] (worktree IS the mayor dir, e.g., <town>/mayor/rig) and
+	// parts[1] (worktree is inside a rig's mayor, e.g., <town>/<rig>/mayor/rig).
+	if parts[0] == "mayor" || (len(parts) >= 2 && parts[1] == "mayor") {
 		return fmt.Errorf("cannot create redirect in canonical beads location (mayor/rig)")
 	}
 
