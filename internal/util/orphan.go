@@ -217,6 +217,30 @@ func processExists(pid int) bool {
 	return err == nil || err == syscall.EPERM
 }
 
+// isIDEClaudeProcess checks if a Claude process was spawned by an IDE extension
+// (VS Code, Cursor, etc.). IDE-launched Claude processes run with TTY "?" but
+// are legitimate — they're controlled by the IDE, not orphaned from dead sessions.
+func isIDEClaudeProcess(pid int) bool {
+	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "args=").Output()
+	if err != nil {
+		return false
+	}
+	args := string(out)
+	// Check for IDE-specific paths in the executable
+	if strings.Contains(args, "vscode-server") ||
+		strings.Contains(args, "vscode/extensions") ||
+		strings.Contains(args, ".cursor-server") ||
+		strings.Contains(args, ".cursor/extensions") {
+		return true
+	}
+	// Generic IDE detection: stream-json I/O is specific to IDE extensions
+	if strings.Contains(args, "--output-format stream-json") &&
+		strings.Contains(args, "--input-format stream-json") {
+		return true
+	}
+	return false
+}
+
 // parseEtime parses ps etime format into seconds.
 // Format: [[DD-]HH:]MM:SS
 // Examples: "01:23" (83s), "01:02:03" (3723s), "2-01:02:03" (176523s)
@@ -334,6 +358,12 @@ func FindOrphanedClaudeProcesses() ([]OrphanedProcess, error) {
 			continue
 		}
 
+		// Skip IDE extension processes (VS Code, Cursor, etc.).
+		// These have TTY "?" but are legitimate — controlled by the IDE.
+		if isIDEClaudeProcess(pid) {
+			continue
+		}
+
 		// Skip processes younger than minOrphanAge seconds
 		// This prevents killing newly spawned subagents and reduces false positives
 		age, err := parseEtime(etimeStr)
@@ -427,6 +457,12 @@ func FindZombieClaudeProcesses() ([]ZombieProcess, error) {
 		// These are interactive terminal sessions (e.g. user running claude
 		// in a regular terminal), not zombies from dead tmux sessions.
 		if tty != "?" && tty != "??" {
+			continue
+		}
+
+		// Skip IDE extension processes (VS Code, Cursor, etc.).
+		// These have TTY "?" but are legitimate — controlled by the IDE.
+		if isIDEClaudeProcess(pid) {
 			continue
 		}
 
