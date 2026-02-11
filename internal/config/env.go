@@ -31,10 +31,6 @@ type AgentEnvConfig struct {
 	// SessionIDEnv is the environment variable name that holds the session ID.
 	// Sets GT_SESSION_ID_ENV so the runtime knows where to find the session ID.
 	SessionIDEnv string
-
-	// BeadsNoDaemon sets BEADS_NO_DAEMON=1 if true
-	// Used for polecats that should bypass the beads daemon
-	BeadsNoDaemon bool
 }
 
 // AgentEnv returns all environment variables for an agent based on the config.
@@ -108,10 +104,6 @@ func AgentEnv(cfg AgentEnvConfig) map[string]string {
 		env["BEADS_AGENT_NAME"] = fmt.Sprintf("%s/%s", cfg.Rig, cfg.AgentName)
 	}
 
-	if cfg.BeadsNoDaemon {
-		env["BEADS_NO_DAEMON"] = "1"
-	}
-
 	// Add optional runtime config directory
 	if cfg.RuntimeConfigDir != "" {
 		env["CLAUDE_CONFIG_DIR"] = cfg.RuntimeConfigDir
@@ -137,7 +129,7 @@ func AgentEnvSimple(role, rig, agentName string) map[string]string {
 
 // ShellQuote returns a shell-safe quoted string.
 // Values containing special characters are wrapped in single quotes.
-// Single quotes within the value are escaped using the '\'' idiom.
+// Single quotes within the value are escaped using the '\” idiom.
 func ShellQuote(s string) string {
 	// Check if quoting is needed (contains shell special chars)
 	needsQuoting := false

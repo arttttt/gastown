@@ -13,9 +13,9 @@ import (
 
 	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/config"
-	"github.com/steveyegge/gastown/internal/runtime"
 	"github.com/steveyegge/gastown/internal/git"
 	"github.com/steveyegge/gastown/internal/rig"
+	"github.com/steveyegge/gastown/internal/runtime"
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/tmux"
 	"github.com/steveyegge/gastown/internal/util"
@@ -645,7 +645,6 @@ func (m *Manager) Start(name string, opts StartOptions) error {
 		AgentName:        name,
 		TownRoot:         townRoot,
 		RuntimeConfigDir: opts.ClaudeConfigDir,
-		BeadsNoDaemon:    true,
 	})
 	for k, v := range envVars {
 		_ = t.SetEnvironment(sessionID, k, v)
@@ -710,4 +709,3 @@ func (m *Manager) IsRunning(name string) (bool, error) {
 	sessionID := m.SessionName(name)
 	return t.HasSession(sessionID)
 }
-

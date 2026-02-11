@@ -477,9 +477,6 @@ set -e
 if [[ -n "$BEADS_DIR_LOG" ]]; then
   echo "${BEADS_DIR:-<unset>}" >> "$BEADS_DIR_LOG"
 fi
-if [[ "$1" == "--no-daemon" ]]; then
-  shift
-fi
 if [[ "$1" == "--allow-stale" ]]; then
   shift
 fi
@@ -515,7 +512,7 @@ case "$cmd" in
     ;;
 esac
 `
-	windowsScript := "@echo off\r\nsetlocal enabledelayedexpansion\r\nif defined BEADS_DIR_LOG (\r\n  if defined BEADS_DIR (\r\n    echo %BEADS_DIR%>>\"%BEADS_DIR_LOG%\"\r\n  ) else (\r\n    echo ^<unset^> >>\"%BEADS_DIR_LOG%\"\r\n  )\r\n)\r\nset \"cmd=%1\"\r\nset \"arg2=%2\"\r\nset \"arg3=%3\"\r\nif \"%cmd%\"==\"--no-daemon\" (\r\n  set \"cmd=%2\"\r\n  set \"arg2=%3\"\r\n  set \"arg3=%4\"\r\n)\r\nif \"%cmd%\"==\"--allow-stale\" (\r\n  set \"cmd=%2\"\r\n  set \"arg2=%3\"\r\n  set \"arg3=%4\"\r\n)\r\nif \"%cmd%\"==\"show\" (\r\n  echo []\r\n  exit /b 0\r\n)\r\nif \"%cmd%\"==\"create\" (\r\n  set \"id=\"\r\n  set \"title=\"\r\n  for %%A in (%*) do (\r\n    set \"arg=%%~A\"\r\n    if /i \"!arg:~0,5!\"==\"--id=\" set \"id=!arg:~5!\"\r\n    if /i \"!arg:~0,8!\"==\"--title=\" set \"title=!arg:~8!\"\r\n  )\r\n  if defined AGENT_LOG (\r\n    echo !id!>>\"%AGENT_LOG%\"\r\n  )\r\n  echo {\"id\":\"!id!\",\"title\":\"!title!\",\"description\":\"\",\"issue_type\":\"agent\"}\r\n  exit /b 0\r\n)\r\nif \"%cmd%\"==\"slot\" exit /b 0\r\nif \"%cmd%\"==\"config\" exit /b 0\r\nexit /b 1\r\n"
+	windowsScript := "@echo off\r\nsetlocal enabledelayedexpansion\r\nif defined BEADS_DIR_LOG (\r\n  if defined BEADS_DIR (\r\n    echo %BEADS_DIR%>>\"%BEADS_DIR_LOG%\"\r\n  ) else (\r\n    echo ^<unset^> >>\"%BEADS_DIR_LOG%\"\r\n  )\r\n)\r\nset \"cmd=%1\"\r\nset \"arg2=%2\"\r\nset \"arg3=%3\"\r\nif \"%cmd%\"==\"--allow-stale\" (\r\n  set \"cmd=%2\"\r\n  set \"arg2=%3\"\r\n  set \"arg3=%4\"\r\n)\r\nif \"%cmd%\"==\"show\" (\r\n  echo []\r\n  exit /b 0\r\n)\r\nif \"%cmd%\"==\"create\" (\r\n  set \"id=\"\r\n  set \"title=\"\r\n  for %%A in (%*) do (\r\n    set \"arg=%%~A\"\r\n    if /i \"!arg:~0,5!\"==\"--id=\" set \"id=!arg:~5!\"\r\n    if /i \"!arg:~0,8!\"==\"--title=\" set \"title=!arg:~8!\"\r\n  )\r\n  if defined AGENT_LOG (\r\n    echo !id!>>\"%AGENT_LOG%\"\r\n  )\r\n  echo {\"id\":\"!id!\",\"title\":\"!title!\",\"description\":\"\",\"issue_type\":\"agent\"}\r\n  exit /b 0\r\n)\r\nif \"%cmd%\"==\"slot\" exit /b 0\r\nif \"%cmd%\"==\"config\" exit /b 0\r\nexit /b 1\r\n"
 
 	binDir := writeFakeBD(t, script, windowsScript)
 	agentLog := filepath.Join(t.TempDir(), "agents.log")
@@ -829,14 +826,14 @@ func TestDetectBeadsPrefixFromConfig_FallbackIssuesJSONL(t *testing.T) {
 			want: "gt",
 		},
 		{
-			name: "skips agent bead when only entry",
+			name:       "skips agent bead when only entry",
 			issuesJSON: `{"id":"gt-demo-witness","title":"agent"}`,
-			want: "",
+			want:       "",
 		},
 		{
-			name: "multi-hyphen prefix with regular hash",
+			name:       "multi-hyphen prefix with regular hash",
 			issuesJSON: `{"id":"baseball-v3-abc12","title":"test"}`,
-			want: "baseball-v3",
+			want:       "baseball-v3",
 		},
 		{
 			name: "multiple regular issues agree on prefix",
@@ -896,11 +893,11 @@ func TestIsStandardBeadHash(t *testing.T) {
 		{"z0ixd", true},
 		{"00000", true},
 		{"abcde", true},
-		{"witness", false},  // too long (agent role)
-		{"abc", false},      // too short
-		{"ABC12", false},    // uppercase
-		{"abc-1", false},    // contains hyphen
-		{"", false},         // empty
+		{"witness", false},    // too long (agent role)
+		{"abc", false},        // too short
+		{"ABC12", false},      // uppercase
+		{"abc-1", false},      // contains hyphen
+		{"", false},           // empty
 		{"abc1234567", false}, // 10 chars (MR hash)
 	}
 

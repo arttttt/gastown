@@ -154,10 +154,9 @@ func (m *Manager) Start(foreground bool, agentOverride string) error {
 	// Set environment variables (non-fatal: session works without these)
 	// Use centralized AgentEnv for consistency across all role startup paths
 	envVars := config.AgentEnv(config.AgentEnvConfig{
-		Role:          "refinery",
-		Rig:           m.rig.Name,
-		TownRoot:      townRoot,
-		BeadsNoDaemon: true,
+		Role:     "refinery",
+		Rig:      m.rig.Name,
+		TownRoot: townRoot,
 	})
 
 	// Add refinery-specific flag
