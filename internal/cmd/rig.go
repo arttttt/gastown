@@ -80,22 +80,33 @@ Example:
 var rigListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all rigs in the workspace",
-	Long: `List all registered rigs and their operational status.
+	Long: `List all rigs registered in the Gas Town workspace.
 
-Displays each rig's name, operational state (OPERATIONAL/PARKED/DOCKED),
-witness and refinery status, and polecat/crew counts.
-Use --json for machine-readable output.`,
+For each rig, displays:
+  - Rig name and operational state (OPERATIONAL, PARKED, DOCKED)
+  - Witness status (running/stopped)
+  - Refinery status (running/stopped)
+  - Number of polecats and crew members
+
+Examples:
+  gt rig list          # List all rigs with status
+  gt rig list --json   # Output as JSON for scripting`,
 	RunE: runRigList,
 }
 
 var rigRemoveCmd = &cobra.Command{
 	Use:   "remove <name>",
 	Short: "Remove a rig from the registry (does not delete files)",
-	Long: `Remove a rig from the Gas Town registry without deleting its files.
+	Long: `Remove a rig from the Gas Town registry.
 
-This removes the rig entry from mayor/rigs.json and cleans up
-the beads route. The rig's directory and all its contents remain
-on disk and can be re-registered with 'gt rig add --adopt'.`,
+This only removes the rig entry from mayor/rigs.json and cleans up
+the beads route. The rig's files on disk are NOT deleted.
+
+To fully remove a rig, delete the directory manually after unregistering.
+
+Examples:
+  gt rig remove myproject                    # Unregister the rig
+  gt rig remove myproject && rm -rf myproject # Unregister and delete files`,
 	Args: cobra.ExactArgs(1),
 	RunE: runRigRemove,
 }

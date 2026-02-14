@@ -34,7 +34,11 @@ Session groups:
 - Rig infra sessions: Witness ↔ Refinery (per rig)
 - Polecat sessions: All polecats in the same rig (e.g., greenplace/Toast ↔ greenplace/Nux)
 
-The appropriate cycling is detected automatically from the session name.`,
+The appropriate cycling is detected automatically from the session name.
+
+Examples:
+  gt cycle next    # Switch to next session in group
+  gt cycle prev    # Switch to previous session in group`,
 }
 
 var cycleNextCmd = &cobra.Command{
@@ -44,7 +48,11 @@ var cycleNextCmd = &cobra.Command{
 
 This command is typically invoked via the C-b n keybinding. It automatically
 detects whether you're in a town-level session (Mayor/Deacon) or a crew session
-and cycles within the appropriate group.`,
+and cycles within the appropriate group.
+
+Examples:
+  gt cycle next
+  gt cycle next --session gt-gastown-witness  # Explicit session context`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cycleToSession(1, cycleSession)
 	},
@@ -57,7 +65,11 @@ var cyclePrevCmd = &cobra.Command{
 
 This command is typically invoked via the C-b p keybinding. It automatically
 detects whether you're in a town-level session (Mayor/Deacon) or a crew session
-and cycles within the appropriate group.`,
+and cycles within the appropriate group.
+
+Examples:
+  gt cycle prev
+  gt cycle prev --session gt-gastown-witness  # Explicit session context`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cycleToSession(-1, cycleSession)
 	},

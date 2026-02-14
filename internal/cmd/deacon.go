@@ -84,8 +84,15 @@ Detach with Ctrl-B D.`,
 var deaconStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check Deacon session status",
-	Long:  `Check if the Deacon tmux session is currently running.`,
-	RunE:  runDeaconStatus,
+	Long: `Check if the Deacon tmux session is currently running.
+
+Shows whether the Deacon has an active tmux session and reports
+its session name. The Deacon is the town-level watchdog that
+receives heartbeats from the daemon.
+
+Examples:
+  gt deacon status`,
+	RunE: runDeaconStatus,
 }
 
 var deaconRestartCmd = &cobra.Command{

@@ -42,22 +42,42 @@ The daemon will run until stopped with 'gt daemon stop'.`,
 var daemonStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the daemon",
-	Long:  `Stop the running Gas Town daemon.`,
-	RunE:  runDaemonStop,
+	Long: `Stop the running Gas Town daemon.
+
+Sends a stop signal to the daemon process and waits for it to exit.
+The daemon must be running or this command returns an error.
+
+Examples:
+  gt daemon stop`,
+	RunE: runDaemonStop,
 }
 
 var daemonStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show daemon status",
-	Long:  `Show the current status of the Gas Town daemon.`,
-	RunE:  runDaemonStatus,
+	Long: `Show the current status of the Gas Town daemon.
+
+Displays whether the daemon is running, its PID, uptime, heartbeat
+count, and whether the binary has been rebuilt since the daemon started.
+
+Examples:
+  gt daemon status`,
+	RunE: runDaemonStatus,
 }
 
 var daemonLogsCmd = &cobra.Command{
 	Use:   "logs",
 	Short: "View daemon logs",
-	Long:  `View the daemon log file.`,
-	RunE:  runDaemonLogs,
+	Long: `View the daemon log file.
+
+Shows the most recent log entries from the daemon. Use -n to control
+how many lines to display, or -f to follow the log in real time.
+
+Examples:
+  gt daemon logs             # Show last 50 lines
+  gt daemon logs -n 100      # Show last 100 lines
+  gt daemon logs -f           # Follow log output in real time`,
+	RunE: runDaemonLogs,
 }
 
 var daemonRunCmd = &cobra.Command{
