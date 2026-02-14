@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -251,9 +253,9 @@ func runRigUndock(cmd *cobra.Command, args []string) error {
 // on the rig identity bead. This function is exported for use by the daemon.
 func IsRigDocked(townRoot, rigName, prefix string) bool {
 	// Construct the rig beads path
-	rigPath := townRoot + "/" + rigName
-	beadsPath := rigPath + "/mayor/rig"
-	if _, err := exec.Command("test", "-d", beadsPath).CombinedOutput(); err != nil {
+	rigPath := filepath.Join(townRoot, rigName)
+	beadsPath := filepath.Join(rigPath, "mayor", "rig")
+	if _, err := os.Stat(beadsPath); err != nil {
 		beadsPath = rigPath
 	}
 
