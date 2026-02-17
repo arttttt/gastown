@@ -141,7 +141,8 @@ func runMailReply(cmd *cobra.Command, args []string) error {
 		reply.ThreadID = generateThreadID()
 	}
 
-	// Send the reply
+	// Send the reply (defer drains async notification goroutines before CLI exits)
+	defer router.WaitPendingNotifications()
 	if err := router.Send(reply); err != nil {
 		return fmt.Errorf("sending reply: %w", err)
 	}

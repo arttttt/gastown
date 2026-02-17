@@ -397,6 +397,7 @@ func handleHelp(townRoot string, msg *mail.Message, dryRun bool) (string, error)
 
 	// Forward to overseer (human)
 	router := mail.NewRouter(townRoot)
+	defer router.WaitPendingNotifications()
 	fwd := &mail.Message{
 		From:     "mayor/",
 		To:       "overseer",
@@ -428,6 +429,7 @@ func handleEscalation(townRoot string, msg *mail.Message, dryRun bool) (string, 
 
 	// Forward to overseer with urgent priority
 	router := mail.NewRouter(townRoot)
+	defer router.WaitPendingNotifications()
 	fwd := &mail.Message{
 		From:     "mayor/",
 		To:       "overseer",

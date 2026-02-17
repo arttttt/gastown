@@ -928,6 +928,7 @@ func runDogDispatch(cmd *cobra.Command, args []string) error {
 	body := formatPluginMailBody(p)
 
 	router := mail.NewRouterWithTownRoot(townRoot, townRoot)
+	defer router.WaitPendingNotifications()
 	msg := &mail.Message{
 		From:      "deacon/",
 		To:        dogAddress,

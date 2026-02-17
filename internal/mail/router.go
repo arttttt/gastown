@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/config"
@@ -24,6 +26,10 @@ var ErrUnknownQueue = errors.New("unknown queue")
 // ErrUnknownAnnounce indicates an announce channel name was not found in configuration.
 var ErrUnknownAnnounce = errors.New("unknown announce channel")
 
+// DefaultIdleNotifyTimeout is how long the router waits for a recipient's
+// session to become idle before falling back to a queued nudge.
+const DefaultIdleNotifyTimeout = 1 * time.Second
+
 // Router handles message delivery via beads.
 // It routes messages to the correct beads database based on address:
 // - Town-level (mayor/, deacon/) -> {townRoot}/.beads
@@ -32,6 +38,12 @@ type Router struct {
 	workDir  string // fallback directory to run bd commands in
 	townRoot string // town root directory (e.g., ~/gt)
 	tmux     *tmux.Tmux
+
+	// IdleNotifyTimeout controls how long to wait for a session to become
+	// idle before falling back to a queued nudge. Zero uses the default.
+	IdleNotifyTimeout time.Duration
+
+	notifyWg sync.WaitGroup // tracks in-flight async notifications
 }
 
 // NewRouter creates a new mail router.
@@ -55,6 +67,13 @@ func NewRouterWithTownRoot(workDir, townRoot string) *Router {
 		townRoot: townRoot,
 		tmux:     tmux.NewTmux(),
 	}
+}
+
+// WaitPendingNotifications blocks until all in-flight async notifications
+// have completed. CLI commands should call this before exiting to avoid
+// losing notifications that are still being delivered.
+func (r *Router) WaitPendingNotifications() {
+	r.notifyWg.Wait()
 }
 
 // isListAddress returns true if the address uses list:name syntax.
@@ -937,10 +956,19 @@ func (r *Router) sendToSingle(msg *Message) error {
 		return fmt.Errorf("sending message: %w", err)
 	}
 
-	// Notify recipient if they have an active session (best-effort notification)
-	// Skip notification for self-mail (handoffs to future-self don't need present-self notified)
-	if !isSelfMail(msg.From, msg.To) && !msg.SuppressNotify {
-		_ = r.notifyRecipient(msg)
+	// Notify recipient if they have an active session (best-effort notification).
+	// Skip when the caller explicitly suppressed notification (--no-notify)
+	// or for self-mail (handoffs to future-self don't need present-self notified).
+	// Notification is async: the durable write is complete, so the caller
+	// doesn't block on idle probing (up to 1s per recipient in fan-out).
+	// Callers that exit soon after Send should call WaitPendingNotifications.
+	if !msg.SuppressNotify && !isSelfMail(msg.From, msg.To) {
+		msgCopy := *msg // copy to avoid data race if caller mutates msg
+		r.notifyWg.Add(1)
+		go func() {
+			defer r.notifyWg.Done()
+			r.notifyRecipient(&msgCopy) //nolint:errcheck
+		}()
 	}
 
 	return nil
@@ -1320,7 +1348,13 @@ func (r *Router) GetMailbox(address string) (*Mailbox, error) {
 }
 
 // notifyRecipient sends a notification to a recipient's tmux session.
-// Uses NudgeSession to add the notification to the agent's conversation history.
+//
+// Notification strategy (idle-aware):
+//  1. If the session is idle (prompt visible), send an immediate nudge.
+//  2. If the session is busy, enqueue a nudge for cooperative delivery at
+//     the next turn boundary.
+//  3. For the overseer (human operator), always use a visible banner.
+//
 // Supports mayor/, deacon/, rig/crew/name, rig/polecats/name, and rig/name addresses.
 // Respects agent DND/muted state - skips notification if recipient has DND enabled.
 func (r *Router) notifyRecipient(msg *Message) error {
@@ -1334,6 +1368,11 @@ func (r *Router) notifyRecipient(msg *Message) error {
 	sessionIDs := AddressToSessionIDs(msg.To)
 	if len(sessionIDs) == 0 {
 		return nil // Unable to determine session ID
+	}
+
+	timeout := r.IdleNotifyTimeout
+	if timeout == 0 {
+		timeout = DefaultIdleNotifyTimeout
 	}
 
 	// Try each possible session ID until we find one that exists.
@@ -1351,9 +1390,31 @@ func (r *Router) notifyRecipient(msg *Message) error {
 			return r.tmux.SendNotificationBanner(sessionID, msg.From, msg.Subject)
 		}
 
-		// Queue the notification for cooperative delivery at the agent's next
-		// turn boundary. This avoids interrupting in-flight tool calls.
 		notification := fmt.Sprintf("📬 You have new mail from %s. Subject: %s. Run 'gt mail inbox' to read.", msg.From, msg.Subject)
+
+		// Idle-aware notification: try immediate nudge first, fall back to queue.
+		waitErr := r.tmux.WaitForIdle(sessionID, timeout)
+		if waitErr == nil {
+			// Session is idle → send immediate nudge
+			if err := r.tmux.NudgeSession(sessionID, notification); err == nil {
+				return nil
+			} else if errors.Is(err, tmux.ErrSessionNotFound) {
+				// Session disappeared between idle check and nudge — try next candidate
+				continue
+			} else if errors.Is(err, tmux.ErrNoServer) {
+				return nil
+			}
+			// NudgeSession failed for non-terminal reason — fall through to queue
+		} else if errors.Is(waitErr, tmux.ErrNoServer) {
+			// No tmux server — no point trying other candidates
+			return nil
+		} else if errors.Is(waitErr, tmux.ErrSessionNotFound) {
+			// Session disappeared — try next candidate
+			continue
+		}
+
+		// Busy or nudge failed → enqueue for cooperative delivery at the
+		// agent's next turn boundary.
 		if r.townRoot != "" {
 			return nudge.Enqueue(r.townRoot, sessionID, nudge.QueuedNudge{
 				Sender:  msg.From,

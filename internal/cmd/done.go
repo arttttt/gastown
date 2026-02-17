@@ -624,6 +624,7 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 				// Mail dispatcher with READY_FOR_REVIEW
 				if dispatcher := attachmentFields.DispatchedBy; dispatcher != "" {
 					townRouter := mail.NewRouter(townRoot)
+					defer townRouter.WaitPendingNotifications()
 					reviewMsg := &mail.Message{
 						To:      dispatcher,
 						From:    detectSender(),
@@ -835,6 +836,7 @@ afterDoltMerge:
 	// Notify Witness about completion
 	// Use town-level beads for cross-agent mail
 	townRouter := mail.NewRouter(townRoot)
+	defer townRouter.WaitPendingNotifications()
 	witnessAddr := fmt.Sprintf("%s/witness", rigName)
 
 	// Build notification body

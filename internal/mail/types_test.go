@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -815,6 +816,30 @@ func TestParseLabelsIdempotentViaPublicMethods(t *testing.T) {
 
 	if len(msg.CC) != 2 {
 		t.Errorf("CC should have 2 entries after multiple method calls, got %d: %v", len(msg.CC), msg.CC)
+	}
+}
+
+func TestSuppressNotifyNotSerialized(t *testing.T) {
+	msg := NewMessage("mayor/", "gastown/Toast", "Test", "Body")
+	msg.SuppressNotify = true
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	// SuppressNotify should not appear in JSON output (json:"-" tag)
+	if containsString(string(data), "SuppressNotify") || containsString(string(data), "suppress") {
+		t.Errorf("SuppressNotify should not be serialized, but found in JSON: %s", data)
+	}
+
+	// Roundtrip: unmarshal should leave SuppressNotify as false (zero value)
+	var decoded Message
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if decoded.SuppressNotify {
+		t.Error("SuppressNotify should be false after roundtrip (not deserialized)")
 	}
 }
 
