@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/gastown/internal/doltserver"
 	"github.com/steveyegge/gastown/internal/style"
+	"github.com/steveyegge/gastown/internal/wasteland"
 	"github.com/steveyegge/gastown/internal/workspace"
 )
 
@@ -90,8 +91,13 @@ func runWlPost(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("ensuring wl-commons database: %w", err)
 	}
 
+	wlCfg, err := wasteland.LoadConfig(townRoot)
+	if err != nil {
+		return fmt.Errorf("loading wasteland config: %w", err)
+	}
+
 	id := doltserver.GenerateWantedID(wlPostTitle)
-	handle := doltserver.GetRigHandle(townRoot)
+	handle := wlCfg.RigHandle
 
 	item := &doltserver.WantedItem{
 		ID:          id,

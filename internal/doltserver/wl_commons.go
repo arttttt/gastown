@@ -246,14 +246,6 @@ CALL DOLT_COMMIT('-m', 'wl post: %s');
 	return doltSQLScriptWithRetry(townRoot, script)
 }
 
-// GetRigHandle returns the rig's handle for the posted_by field.
-func GetRigHandle(townRoot string) string {
-	if org := DoltHubOrg(); org != "" {
-		return org
-	}
-	return filepath.Base(townRoot)
-}
-
 // ClaimWanted updates a wanted item's status to claimed.
 func ClaimWanted(townRoot, wantedID, rigHandle string) error {
 	esc := func(s string) string {
