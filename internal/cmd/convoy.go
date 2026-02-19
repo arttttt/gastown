@@ -1961,6 +1961,13 @@ func applyFreshIssueDetails(dep *trackedDependency, details *issueDetails) {
 	if dep.IssueType == "" {
 		dep.IssueType = details.IssueType
 	}
+	// Always refresh labels — bd dep list may return stale labels from
+	// dependency records, but bd show returns current bead labels. This
+	// ensures isReadyIssue sees accurate queue labels (gt:queued,
+	// gt:queue-dispatched) for cross-rig beads.
+	if len(details.Labels) > 0 {
+		dep.Labels = details.Labels
+	}
 }
 
 // getTrackedIssues uses bd dep list to get issues tracked by a convoy.
@@ -2049,6 +2056,7 @@ type issueDetailsJSON struct {
 	Status         string            `json:"status"`
 	IssueType      string            `json:"issue_type"`
 	Assignee       string            `json:"assignee"`
+	Labels         []string          `json:"labels"`
 	BlockedBy      []string          `json:"blocked_by"`
 	BlockedByCount int               `json:"blocked_by_count"`
 	Dependencies   []issueDependency `json:"dependencies"`
@@ -2061,6 +2069,7 @@ func (issue issueDetailsJSON) toIssueDetails() *issueDetails {
 		Status:         issue.Status,
 		IssueType:      issue.IssueType,
 		Assignee:       issue.Assignee,
+		Labels:         issue.Labels,
 		BlockedBy:      issue.BlockedBy,
 		BlockedByCount: issue.BlockedByCount,
 		Dependencies:   issue.Dependencies,
@@ -2113,6 +2122,7 @@ type issueDetails struct {
 	Status         string
 	IssueType      string
 	Assignee       string
+	Labels         []string
 	BlockedBy      []string
 	BlockedByCount int
 	Dependencies   []issueDependency
