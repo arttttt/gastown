@@ -1882,11 +1882,26 @@ func IsInsideTmux() bool {
 
 // SetMailClickBinding configures left-click on status-right to show mail preview.
 // This creates a popup showing the first unread message when clicking the mail icon area.
+//
+// The binding is conditional: it only activates in Gas Town sessions (those matching
+// a registered rig prefix or "hq-"). In non-GT sessions, the user's original
+// MouseDown1StatusRight binding (if any) is preserved.
+// See: https://github.com/steveyegge/gastown/issues/1548
 func (t *Tmux) SetMailClickBinding(session string) error {
-	// Bind left-click on status-right to show mail popup
-	// The popup runs gt mail peek and closes on any key
+	// Skip if already configured — preserves user's original fallback from first call
+	if t.isGTBinding("root", "MouseDown1StatusRight") {
+		return nil
+	}
+	ifShell := fmt.Sprintf("echo '#{session_name}' | grep -Eq '%s'", sessionPrefixPattern())
+	fallback := t.getKeyBinding("root", "MouseDown1StatusRight")
+	if fallback == "" {
+		// No prior binding — do nothing in non-GT sessions
+		fallback = ":"
+	}
 	_, err := t.run("bind-key", "-T", "root", "MouseDown1StatusRight",
-		"display-popup", "-E", "-w", "60", "-h", "15", "gt mail peek || echo 'No unread mail'")
+		"if-shell", ifShell,
+		"display-popup -E -w 60 -h 15 'gt mail peek || echo No unread mail'",
+		fallback)
 	return err
 }
 
@@ -1957,6 +1972,85 @@ func (t *Tmux) SetTownCycleBindings(session string) error {
 	return t.SetCycleBindings(session)
 }
 
+// isGTBinding checks if the given key already has a Gas Town if-shell binding.
+// Used to skip redundant re-binding on repeated ConfigureGasTownSession calls,
+// preserving the user's original fallback captured on the first call.
+func (t *Tmux) isGTBinding(table, key string) bool {
+	output, err := t.run("list-keys", "-T", table, key)
+	if err != nil || output == "" {
+		return false
+	}
+	// GT bindings use if-shell with a run-shell/display-popup invoking "gt ".
+	// Require both "if-shell" and "gt " to avoid false positives on user
+	// bindings that happen to contain "gt " without the if-shell guard.
+	return strings.Contains(output, "if-shell") && strings.Contains(output, "gt ")
+}
+
+// getKeyBinding returns the current tmux command bound to the given key in the
+// specified key table. Returns empty string if no binding exists or if querying
+// fails. This is used to capture user bindings before overwriting them, so the
+// original binding can be preserved in the else branch of an if-shell guard.
+//
+// The returned string is a tmux command (e.g., "next-window", "run-shell 'lazygit'")
+// suitable for use as a command argument to bind-key or if-shell.
+//
+// If the existing binding is already a Gas Town if-shell binding (detected by
+// the presence of both "if-shell" and "gt " in the output), it is treated as
+// no prior binding to avoid recursive wrapping on repeated calls.
+func (t *Tmux) getKeyBinding(table, key string) string {
+	// tmux list-keys -T <table> <key> outputs a line like:
+	//   bind-key -T prefix g if-shell "..." "run-shell 'gt agents'" ":"
+	// We need to extract just the command portion.
+	//
+	// Assumed format (tested with tmux 3.3+):
+	//   bind-key [-r] -T <table> <key> <command...>
+	// If tmux changes this format, parsing fails safely (returns ""),
+	// which causes the caller to use its default fallback.
+	output, err := t.run("list-keys", "-T", table, key)
+	if err != nil || output == "" {
+		return ""
+	}
+
+	// If this is already a Gas Town binding (from a previous ConfigureGasTownSession call),
+	// don't capture it — we'd end up wrapping our own if-shell in another if-shell.
+	// We check for both "if-shell" and "gt " to avoid false-positiving on user
+	// bindings that happen to contain the substring "gt ".
+	if strings.Contains(output, "if-shell") && strings.Contains(output, "gt ") {
+		return ""
+	}
+
+	// Parse the binding command from list-keys output.
+	// Format: "bind-key [-r] -T <table> <key> <command...>"
+	// We need everything after the key name.
+	// Find the key in the output and take everything after it.
+	fields := strings.Fields(output)
+	keyIdx := -1
+	for i, f := range fields {
+		if f == "-T" && i+2 < len(fields) {
+			// Skip table name, the next field is the key
+			keyIdx = i + 2
+			break
+		}
+	}
+	if keyIdx < 0 || keyIdx >= len(fields)-1 {
+		return ""
+	}
+
+	// Everything after the key is the command
+	// Rejoin from keyIdx+1 onward, but we need to preserve the original spacing.
+	// Find the key token in the original string and take everything after it.
+	idx := strings.Index(output, " "+fields[keyIdx]+" ")
+	if idx < 0 {
+		return ""
+	}
+	cmd := strings.TrimSpace(output[idx+len(" "+fields[keyIdx]+" "):])
+	if cmd == "" {
+		return ""
+	}
+
+	return cmd
+}
+
 // safePrefixRe matches the character set guaranteed by beadsPrefixRegexp in
 // internal/rig/manager.go.  Used as defense-in-depth: if rigs.json is
 // hand-edited with regex metacharacters or shell-special chars, we skip the
@@ -1996,28 +2090,45 @@ func sessionPrefixPattern() string {
 //
 // IMPORTANT: These bindings are conditional - they only run gt cycle for
 // Gas Town sessions (those matching a registered rig prefix or "hq-").
-// For non-GT sessions, the default tmux behavior (next-window/previous-window)
-// is preserved.
+// For non-GT sessions, the user's original binding is preserved. If no
+// prior binding existed, the tmux defaults (next-window/previous-window)
+// are used.
 // See: https://github.com/steveyegge/gastown/issues/13
+// See: https://github.com/steveyegge/gastown/issues/1548
 //
 // IMPORTANT: We pass #{session_name} to the command because run-shell doesn't
 // reliably preserve the session context. tmux expands #{session_name} at binding
 // resolution time (when the key is pressed), giving us the correct session.
 func (t *Tmux) SetCycleBindings(session string) error {
+	// Skip if already configured — preserves user's original fallback from first call
+	if t.isGTBinding("prefix", "n") {
+		return nil
+	}
 	pattern := sessionPrefixPattern()
 	ifShell := fmt.Sprintf("echo '#{session_name}' | grep -Eq '%s'", pattern)
-	// C-b n → gt cycle next for Gas Town sessions, next-window otherwise
+
+	// Capture existing bindings before overwriting, falling back to tmux defaults
+	nextFallback := t.getKeyBinding("prefix", "n")
+	if nextFallback == "" {
+		nextFallback = "next-window"
+	}
+	prevFallback := t.getKeyBinding("prefix", "p")
+	if prevFallback == "" {
+		prevFallback = "previous-window"
+	}
+
+	// C-b n → gt cycle next for Gas Town sessions, original binding otherwise
 	if _, err := t.run("bind-key", "-T", "prefix", "n",
 		"if-shell", ifShell,
 		"run-shell 'gt cycle next --session #{session_name}'",
-		"next-window"); err != nil {
+		nextFallback); err != nil {
 		return err
 	}
-	// C-b p → gt cycle prev for Gas Town sessions, previous-window otherwise
+	// C-b p → gt cycle prev for Gas Town sessions, original binding otherwise
 	if _, err := t.run("bind-key", "-T", "prefix", "p",
 		"if-shell", ifShell,
 		"run-shell 'gt cycle prev --session #{session_name}'",
-		"previous-window"); err != nil {
+		prevFallback); err != nil {
 		return err
 	}
 	return nil
@@ -2028,15 +2139,26 @@ func (t *Tmux) SetCycleBindings(session string) error {
 // Uses `gt feed --window` which handles both creation and switching.
 //
 // IMPORTANT: This binding is conditional - it only runs for Gas Town sessions
-// (those matching a registered rig prefix or "hq-"). For non-GT sessions, a
-// help message is shown.
+// (those matching a registered rig prefix or "hq-"). For non-GT sessions, the
+// user's original binding is preserved. If no prior binding existed, the key
+// press is silently ignored.
 // See: https://github.com/steveyegge/gastown/issues/13
+// See: https://github.com/steveyegge/gastown/issues/1548
 func (t *Tmux) SetFeedBinding(session string) error {
+	// Skip if already configured — preserves user's original fallback from first call
+	if t.isGTBinding("prefix", "a") {
+		return nil
+	}
 	ifShell := fmt.Sprintf("echo '#{session_name}' | grep -Eq '%s'", sessionPrefixPattern())
+	fallback := t.getKeyBinding("prefix", "a")
+	if fallback == "" {
+		// No prior binding — do nothing in non-GT sessions
+		fallback = ":"
+	}
 	_, err := t.run("bind-key", "-T", "prefix", "a",
 		"if-shell", ifShell,
 		"run-shell 'gt feed --window'",
-		"display-message 'C-b a is for Gas Town sessions only'")
+		fallback)
 	return err
 }
 
@@ -2044,14 +2166,25 @@ func (t *Tmux) SetFeedBinding(session string) error {
 // This runs `gt agents` which displays a tmux popup with all Gas Town agents.
 //
 // IMPORTANT: This binding is conditional - it only runs for Gas Town sessions
-// (those matching a registered rig prefix or "hq-"). For non-GT sessions, a
-// help message is shown.
+// (those matching a registered rig prefix or "hq-"). For non-GT sessions, the
+// user's original binding is preserved. If no prior binding existed, the key
+// press is silently ignored.
+// See: https://github.com/steveyegge/gastown/issues/1548
 func (t *Tmux) SetAgentsBinding(session string) error {
+	// Skip if already configured — preserves user's original fallback from first call
+	if t.isGTBinding("prefix", "g") {
+		return nil
+	}
 	ifShell := fmt.Sprintf("echo '#{session_name}' | grep -Eq '%s'", sessionPrefixPattern())
+	fallback := t.getKeyBinding("prefix", "g")
+	if fallback == "" {
+		// No prior binding — do nothing in non-GT sessions
+		fallback = ":"
+	}
 	_, err := t.run("bind-key", "-T", "prefix", "g",
 		"if-shell", ifShell,
 		"run-shell 'gt agents'",
-		"display-message 'C-b g is for Gas Town sessions only'")
+		fallback)
 	return err
 }
 
