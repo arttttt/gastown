@@ -23,6 +23,7 @@ type AttachmentFields struct {
 	AttachedArgs     string // Natural language args passed via gt sling --args (no-tmux mode)
 	DispatchedBy     string // Agent ID that dispatched this work (for completion notification)
 	NoMerge          bool   // If true, gt done skips merge queue (for upstream PRs/human review)
+	Mode             string // Execution mode: "" (normal) or "ralph" (Ralph Wiggum loop)
 }
 
 // ParseAttachmentFields extracts attachment fields from an issue's description.
@@ -70,6 +71,9 @@ func ParseAttachmentFields(issue *Issue) *AttachmentFields {
 		case "no_merge", "no-merge", "nomerge":
 			fields.NoMerge = strings.ToLower(value) == "true"
 			hasFields = true
+		case "mode":
+			fields.Mode = value
+			hasFields = true
 		}
 	}
 
@@ -103,6 +107,9 @@ func FormatAttachmentFields(fields *AttachmentFields) string {
 	if fields.NoMerge {
 		lines = append(lines, "no_merge: true")
 	}
+	if fields.Mode != "" {
+		lines = append(lines, "mode: "+fields.Mode)
+	}
 
 	return strings.Join(lines, "\n")
 }
@@ -128,6 +135,7 @@ func SetAttachmentFields(issue *Issue, fields *AttachmentFields) string {
 		"no_merge":          true,
 		"no-merge":          true,
 		"nomerge":           true,
+		"mode":              true,
 	}
 
 	// Collect non-attachment lines from existing description

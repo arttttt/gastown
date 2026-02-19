@@ -225,6 +225,92 @@ func TestParseIntField(t *testing.T) {
 	}
 }
 
+// --- AttachmentFields Mode round-trip ---
+
+func TestAttachmentFieldsModeRoundTrip(t *testing.T) {
+	original := &AttachmentFields{
+		AttachedMolecule: "gt-wisp-123",
+		AttachedAt:       "2026-02-18T12:00:00Z",
+		Mode:             "ralph",
+	}
+
+	formatted := FormatAttachmentFields(original)
+	if !contains(formatted, "mode: ralph") {
+		t.Errorf("FormatAttachmentFields missing mode field, got:\n%s", formatted)
+	}
+
+	issue := &Issue{Description: formatted}
+	parsed := ParseAttachmentFields(issue)
+	if parsed == nil {
+		t.Fatal("round-trip parse returned nil")
+	}
+	if parsed.Mode != "ralph" {
+		t.Errorf("Mode: got %q, want %q", parsed.Mode, "ralph")
+	}
+	if parsed.AttachedMolecule != "gt-wisp-123" {
+		t.Errorf("AttachedMolecule: got %q, want %q", parsed.AttachedMolecule, "gt-wisp-123")
+	}
+}
+
+func TestSetAttachmentFieldsPreservesMode(t *testing.T) {
+	issue := &Issue{
+		Description: "mode: ralph\nattached_molecule: gt-wisp-old\nSome other content",
+	}
+	fields := &AttachmentFields{
+		AttachedMolecule: "gt-wisp-new",
+		Mode:             "ralph",
+	}
+	newDesc := SetAttachmentFields(issue, fields)
+	if !contains(newDesc, "mode: ralph") {
+		t.Errorf("SetAttachmentFields lost mode field, got:\n%s", newDesc)
+	}
+	if !contains(newDesc, "attached_molecule: gt-wisp-new") {
+		t.Errorf("SetAttachmentFields lost attached_molecule, got:\n%s", newDesc)
+	}
+	if !contains(newDesc, "Some other content") {
+		t.Errorf("SetAttachmentFields lost non-attachment content, got:\n%s", newDesc)
+	}
+}
+
+// --- AgentFields Mode round-trip ---
+
+func TestAgentFieldsModeRoundTrip(t *testing.T) {
+	original := &AgentFields{
+		RoleType:   "polecat",
+		Rig:        "gastown",
+		AgentState: "working",
+		HookBead:   "gt-abc",
+		Mode:       "ralph",
+	}
+
+	formatted := FormatAgentDescription("Polecat Test", original)
+	if !contains(formatted, "mode: ralph") {
+		t.Errorf("FormatAgentDescription missing mode field, got:\n%s", formatted)
+	}
+
+	parsed := ParseAgentFields(formatted)
+	if parsed.Mode != "ralph" {
+		t.Errorf("Mode: got %q, want %q", parsed.Mode, "ralph")
+	}
+	if parsed.RoleType != "polecat" {
+		t.Errorf("RoleType: got %q, want %q", parsed.RoleType, "polecat")
+	}
+}
+
+func TestAgentFieldsModeOmittedWhenEmpty(t *testing.T) {
+	fields := &AgentFields{
+		RoleType:   "polecat",
+		Rig:        "gastown",
+		AgentState: "working",
+		// Mode intentionally empty
+	}
+
+	formatted := FormatAgentDescription("Polecat Test", fields)
+	if contains(formatted, "mode:") {
+		t.Errorf("FormatAgentDescription should not include mode when empty, got:\n%s", formatted)
+	}
+}
+
 // --- ParseAgentFieldsFromDescription alias (not covered in beads_test.go) ---
 
 func TestParseAgentFieldsFromDescription(t *testing.T) {

@@ -124,6 +124,7 @@ var (
 	slingNoBoot        bool   // --no-boot: skip wakeRigAgents (avoid witness/refinery boot and lock contention)
 	slingMaxConcurrent int    // --max-concurrent: limit concurrent spawns in batch mode
 	slingBaseBranch    string // --base-branch: override base branch for polecat worktree
+	slingRalph         bool   // --ralph: enable Ralph Wiggum loop mode for multi-step workflows
 )
 
 func init() {
@@ -148,6 +149,7 @@ func init() {
 	slingCmd.Flags().BoolVar(&slingNoBoot, "no-boot", false, "Skip rig boot after polecat spawn (avoids witness/refinery lock contention)")
 	slingCmd.Flags().IntVar(&slingMaxConcurrent, "max-concurrent", 0, "Limit concurrent polecat spawns in batch mode (0 = no limit)")
 	slingCmd.Flags().StringVar(&slingBaseBranch, "base-branch", "", "Override base branch for polecat worktree (e.g., 'develop', 'release/v2')")
+	slingCmd.Flags().BoolVar(&slingRalph, "ralph", false, "Enable Ralph Wiggum loop mode (fresh context per step, for multi-step workflows)")
 
 	rootCmd.AddCommand(slingCmd)
 }
@@ -623,11 +625,18 @@ func runSling(cmd *cobra.Command, args []string) error {
 	// Store all attachment fields in a single read-modify-write cycle.
 	// This eliminates the race condition where sequential independent updates
 	// (dispatcher, args, no_merge, attached_molecule) could overwrite each other.
+	// Determine mode
+	var slingMode string
+	if slingRalph {
+		slingMode = "ralph"
+	}
+
 	fieldUpdates := beadFieldUpdates{
 		Dispatcher:       actor,
 		Args:             slingArgs,
 		AttachedMolecule: attachedMoleculeID,
 		NoMerge:          slingNoMerge,
+		Mode:             slingMode,
 	}
 	if err := storeFieldsInBead(beadID, fieldUpdates); err != nil {
 		// Warn but don't fail - polecat will still complete work
@@ -639,6 +648,14 @@ func runSling(cmd *cobra.Command, args []string) error {
 		if slingNoMerge {
 			fmt.Printf("%s No-merge mode enabled (work stays on feature branch)\n", style.Bold.Render("✓"))
 		}
+		if slingMode == "ralph" {
+			fmt.Printf("%s Ralph loop mode enabled (ralphcat)\n", style.Bold.Render("✓"))
+		}
+	}
+
+	// Store mode on agent bead (stuck detector reads from agent fields)
+	if slingMode != "" {
+		updateAgentMode(targetAgent, slingMode, hookWorkDir, townBeadsDir)
 	}
 
 	// Start delayed dog session now that hook is set
