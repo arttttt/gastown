@@ -4,6 +4,7 @@ package session
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/steveyegge/gastown/internal/config"
@@ -195,6 +196,11 @@ func StartSession(t *tmux.Tmux, cfg SessionConfig) (*StartResult, error) {
 		Agent:            cfg.AgentOverride,
 		ResolvedAgent:    runtimeConfig.ResolvedAgent,
 	})
+	// FIX: GT_PROCESS_NAMES must be set for correct IsAgentAlive detection
+	// when using non-Claude agents (opencode, codex, etc.)
+	// See: https://github.com/steveyegge/gastown/issues/1808
+	processNames := config.GetProcessNames(runtimeConfig.ResolvedAgent)
+	envVars["GT_PROCESS_NAMES"] = strings.Join(processNames, ",")
 	for _, k := range mapKeysSorted(envVars) {
 		_ = t.SetEnvironment(cfg.SessionID, k, envVars[k])
 	}
