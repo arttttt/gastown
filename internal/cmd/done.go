@@ -49,7 +49,8 @@ Examples:
   gt done --issue gt-abc               # Explicit issue ID
   gt done --status ESCALATED           # Signal blocker, skip MR
   gt done --status DEFERRED            # Pause work, skip MR`,
-	RunE: runDone,
+	SilenceUsage: true,
+	RunE:         runDone,
 }
 
 var (
@@ -117,7 +118,9 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 			if err := selfKillSession(deferredTownRoot, deferredRoleInfo); err != nil {
 				style.PrintWarning("deferred session kill failed: %v", err)
 			}
-			retErr = NewSilentExit(0)
+			if retErr == nil {
+				retErr = NewSilentExit(0)
+			}
 		}
 	}()
 
@@ -1260,7 +1263,7 @@ func updateAgentStateOnDone(cwd, townRoot, exitType, _ string) { // issueID unus
 		if _, err := bd.Run("agent", "state", agentBeadID, "stuck"); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: couldn't set agent %s to stuck: %v\n", agentBeadID, err)
 		}
-	// ExitCompleted and ExitDeferred don't set state - observable from tmux
+		// ExitCompleted and ExitDeferred don't set state - observable from tmux
 	}
 
 	// ZFC #10: Self-report cleanup status

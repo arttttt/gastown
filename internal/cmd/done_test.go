@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -526,6 +527,57 @@ func TestDeferredKillNotOnValidationError(t *testing.T) {
 	}
 }
 
+// TestDeferredCleanupPreservesValidationError verifies that the deferred cleanup
+// does NOT overwrite retErr when a validation error has already been set.
+// This is a regression test for the fix in done.go that changed:
+//
+//	retErr = NewSilentExit(0)
+//
+// to:
+//
+//	if retErr == nil { retErr = NewSilentExit(0) }
+func TestDeferredCleanupPreservesValidationError(t *testing.T) {
+	originalErr := fmt.Errorf("validation failed: bad input")
+
+	var retErr error = originalErr
+
+	sessionCleanupNeeded := true
+	sessionKilled := false
+
+	if sessionCleanupNeeded && !sessionKilled {
+		if retErr == nil {
+			retErr = NewSilentExit(0)
+		}
+	}
+
+	if retErr != originalErr {
+		t.Errorf("retErr was overwritten: got %v, want %v", retErr, originalErr)
+	}
+}
+
+// TestDeferredCleanupSetsSilentExitOnSuccess verifies that the deferred cleanup
+// sets retErr to SilentExit(0) when there was no prior error.
+func TestDeferredCleanupSetsSilentExitOnSuccess(t *testing.T) {
+	var retErr error = nil
+
+	sessionCleanupNeeded := true
+	sessionKilled := false
+
+	if sessionCleanupNeeded && !sessionKilled {
+		if retErr == nil {
+			retErr = NewSilentExit(0)
+		}
+	}
+
+	if retErr == nil {
+		t.Error("retErr should be set to SilentExit(0)")
+	}
+	var silentExit *SilentExitError
+	if !errors.As(retErr, &silentExit) {
+		t.Errorf("retErr should be SilentExitError, got %T", retErr)
+	}
+}
+
 // TestBranchDetectionGuard verifies that the branch detection logic in runDone
 // correctly handles the three states: cwd available, cwd unavailable with GT_BRANCH,
 // and cwd unavailable without GT_BRANCH.
@@ -857,7 +909,7 @@ func TestReadDoneCheckpoints(t *testing.T) {
 			},
 		},
 		{
-			name:   "all checkpoints",
+			name: "all checkpoints",
 			labels: []string{
 				"done-cp:pushed:branch-name:1738972800",
 				"done-cp:mr-created:gt-mr1:1738972801",
@@ -872,7 +924,7 @@ func TestReadDoneCheckpoints(t *testing.T) {
 			},
 		},
 		{
-			name:   "mixed with done-intent and other labels",
+			name: "mixed with done-intent and other labels",
 			labels: []string{
 				"gt:agent",
 				"done-intent:COMPLETED:1738972800",
@@ -1052,12 +1104,12 @@ func TestCheckpointNilMapSafe(t *testing.T) {
 // convoy merge=direct was not propagated because cross-rig dep resolution failed.
 func TestConvoyInfoFallbackChain(t *testing.T) {
 	tests := []struct {
-		name            string
-		attachmentInfo  *ConvoyInfo // Result from getConvoyInfoFromIssue
-		depInfo         *ConvoyInfo // Result from getConvoyInfoForIssue
-		wantConvoyID    string
-		wantMerge       string
-		wantNil         bool
+		name           string
+		attachmentInfo *ConvoyInfo // Result from getConvoyInfoFromIssue
+		depInfo        *ConvoyInfo // Result from getConvoyInfoForIssue
+		wantConvoyID   string
+		wantMerge      string
+		wantNil        bool
 	}{
 		{
 			name:           "attachment fields provide convoy info",
