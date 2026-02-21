@@ -185,7 +185,11 @@ func (c *Curator) shouldDedupe(event *events.Event) bool {
 	case events.TypeDone:
 		// Dedupe repeated done events from same actor within window
 		// Check if we've already written a done event for this actor to the feed
-		recentFeedEvents := c.readRecentFeedEvents(c.doneDedupeWindow)
+		recentFeedEvents, err := c.readRecentFeedEvents(c.doneDedupeWindow)
+		if err != nil {
+			log.Printf("warning: reading recent feed events for dedup: %v", err)
+			// Fail-open: don't dedupe if we can't read the feed
+		}
 		for _, e := range recentFeedEvents {
 			if e.Type == events.TypeDone && e.Actor == event.Actor {
 				return true // Skip duplicate (already in feed)
@@ -209,7 +213,7 @@ const tailReadSize int64 = 1 << 20
 // readRecentFeedEvents reads feed events from the feed file within the given time window.
 // ZFC: The feed file is the observable state of what we've already output.
 // Reads at most tailReadSize bytes from the end to bound memory usage.
-func (c *Curator) readRecentFeedEvents(window time.Duration) []FeedEvent {
+func (c *Curator) readRecentFeedEvents(window time.Duration) ([]FeedEvent, error) {
 	feedPath := filepath.Join(c.townRoot, FeedFile)
 
 	// In-process mutex complements the flock (which only coordinates across processes).
@@ -219,19 +223,25 @@ func (c *Curator) readRecentFeedEvents(window time.Duration) []FeedEvent {
 	// Acquire shared read lock to prevent partial reads during concurrent writes
 	fl := flock.New(feedPath + ".lock")
 	if err := fl.RLock(); err != nil {
-		return nil
+		return nil, fmt.Errorf("acquiring feed read lock: %w", err)
 	}
 	defer fl.Unlock() //nolint:errcheck // best-effort unlock
 
 	f, err := os.Open(feedPath)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("opening feed file: %w", err)
 	}
 	defer f.Close()
 
 	info, err := f.Stat()
-	if err != nil || info.Size() == 0 {
-		return nil
+	if err != nil {
+		return nil, fmt.Errorf("stat feed file: %w", err)
+	}
+	if info.Size() == 0 {
+		return nil, nil
 	}
 
 	// Seek to at most tailReadSize bytes before EOF
@@ -240,7 +250,7 @@ func (c *Curator) readRecentFeedEvents(window time.Duration) []FeedEvent {
 		seekTo = 0
 	}
 	if _, err := f.Seek(seekTo, io.SeekStart); err != nil {
-		return nil
+		return nil, fmt.Errorf("seeking feed file: %w", err)
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -263,23 +273,32 @@ func (c *Curator) readRecentFeedEvents(window time.Duration) []FeedEvent {
 			result = append(result, event)
 		}
 	}
-	return result
+	if err := scanner.Err(); err != nil {
+		return result, fmt.Errorf("scanning feed file: %w", err)
+	}
+	return result, nil
 }
 
 // readRecentEvents reads events from the events file within the given time window.
 // ZFC: This is the observable state that replaces in-memory caching.
 // Reads at most tailReadSize bytes from the end to bound memory usage.
-func (c *Curator) readRecentEvents(window time.Duration) []events.Event {
+func (c *Curator) readRecentEvents(window time.Duration) ([]events.Event, error) {
 	eventsPath := filepath.Join(c.townRoot, events.EventsFile)
 	f, err := os.Open(eventsPath)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("opening events file: %w", err)
 	}
 	defer f.Close()
 
 	info, err := f.Stat()
-	if err != nil || info.Size() == 0 {
-		return nil
+	if err != nil {
+		return nil, fmt.Errorf("stat events file: %w", err)
+	}
+	if info.Size() == 0 {
+		return nil, nil
 	}
 
 	seekTo := info.Size() - tailReadSize
@@ -287,7 +306,7 @@ func (c *Curator) readRecentEvents(window time.Duration) []events.Event {
 		seekTo = 0
 	}
 	if _, err := f.Seek(seekTo, io.SeekStart); err != nil {
-		return nil
+		return nil, fmt.Errorf("seeking events file: %w", err)
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -310,13 +329,19 @@ func (c *Curator) readRecentEvents(window time.Duration) []events.Event {
 			result = append(result, event)
 		}
 	}
-	return result
+	if err := scanner.Err(); err != nil {
+		return result, fmt.Errorf("scanning events file: %w", err)
+	}
+	return result, nil
 }
 
 // countRecentSlings counts sling events from an actor within the given window.
 // ZFC: Derives count from the events file, not in-memory cache.
 func (c *Curator) countRecentSlings(actor string, window time.Duration) int {
-	recentEvents := c.readRecentEvents(window)
+	recentEvents, err := c.readRecentEvents(window)
+	if err != nil {
+		log.Printf("warning: reading recent events for aggregation: %v", err)
+	}
 	count := 0
 	for _, e := range recentEvents {
 		if e.Type == events.TypeSling && e.Actor == actor {
@@ -378,9 +403,13 @@ func (c *Curator) writeFeedEvent(event *events.Event) {
 		log.Printf("warning: opening feed file: %v", err)
 		return
 	}
-	defer f.Close()
 
-	_, _ = f.Write(data) //nolint:errcheck // best-effort append under flock
+	if _, err := f.Write(data); err != nil {
+		log.Printf("warning: writing feed event: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		log.Printf("warning: closing feed file after write: %v", err)
+	}
 }
 
 // truncateFeedFile keeps the newest half of the feed file using atomic rename.

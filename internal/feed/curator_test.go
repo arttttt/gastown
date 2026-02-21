@@ -474,7 +474,10 @@ func TestCurator_ReadRecentFeedEventsLargeFile(t *testing.T) {
 
 	curator := NewCurator(tmpDir)
 
-	result := curator.readRecentFeedEvents(10 * time.Second)
+	result, err := curator.readRecentFeedEvents(10 * time.Second)
+	if err != nil {
+		t.Fatalf("readRecentFeedEvents error: %v", err)
+	}
 
 	if len(result) > 100 {
 		t.Errorf("readRecentFeedEvents returned %d events for 10s window, expected << 5000", len(result))
@@ -638,7 +641,7 @@ func TestCurator_ConcurrentFeedReadWrite(t *testing.T) {
 		} else {
 			go func() {
 				defer wg.Done()
-				_ = curator.readRecentFeedEvents(10 * time.Second)
+				_, _ = curator.readRecentFeedEvents(10 * time.Second)
 			}()
 		}
 	}
@@ -685,5 +688,100 @@ func TestCurator_StartErrorPersistsAcrossCalls(t *testing.T) {
 	}
 	if err1.Error() != err2.Error() {
 		t.Errorf("error mismatch: first=%q, second=%q", err1, err2)
+	}
+}
+
+// TestCurator_ReadRecentFeedEvents_ScannerError verifies that IO errors
+// during scanning are returned, not silently swallowed.
+// Regression test for gt-0e4.
+func TestCurator_ReadRecentFeedEvents_ScannerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	feedPath := filepath.Join(tmpDir, FeedFile)
+
+	// Write a valid event followed by a line exceeding bufio.Scanner's
+	// default max token size (64KB). This triggers a scanner error.
+	f, err := os.OpenFile(feedPath, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Write one valid event
+	ev := FeedEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Source:    "gt",
+		Type:      events.TypeDone,
+		Actor:     "test-actor",
+		Summary:   "valid event",
+	}
+	data, _ := json.Marshal(ev)
+	f.Write(append(data, '\n'))
+
+	// Write a line that exceeds the default scanner buffer (64KB)
+	longLine := make([]byte, 70*1024)
+	for i := range longLine {
+		longLine[i] = 'x'
+	}
+	f.Write(longLine)
+	f.Write([]byte{'\n'})
+	f.Close()
+
+	curator := NewCurator(tmpDir)
+	result, err := curator.readRecentFeedEvents(1 * time.Hour)
+
+	// Should return an error from scanner.Err()
+	if err == nil {
+		t.Fatal("readRecentFeedEvents should return scanner error for oversized line")
+	}
+	if !strings.Contains(err.Error(), "scanning feed file") {
+		t.Errorf("error should mention scanning, got: %v", err)
+	}
+	// Should still return the partial results read before the error
+	if len(result) != 1 {
+		t.Errorf("expected 1 partial result before scanner error, got %d", len(result))
+	}
+}
+
+// TestCurator_ReadRecentEvents_ScannerError verifies that IO errors
+// during events file scanning are returned, not silently swallowed.
+// Regression test for gt-0e4.
+func TestCurator_ReadRecentEvents_ScannerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	eventsPath := filepath.Join(tmpDir, events.EventsFile)
+
+	// Write a valid event followed by an oversized line
+	f, err := os.OpenFile(eventsPath, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := events.Event{
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		Source:     "gt",
+		Type:       events.TypeDone,
+		Actor:      "test-actor",
+		Visibility: events.VisibilityFeed,
+	}
+	data, _ := json.Marshal(ev)
+	f.Write(append(data, '\n'))
+
+	// Oversized line triggers scanner.Err()
+	longLine := make([]byte, 70*1024)
+	for i := range longLine {
+		longLine[i] = 'y'
+	}
+	f.Write(longLine)
+	f.Write([]byte{'\n'})
+	f.Close()
+
+	curator := NewCurator(tmpDir)
+	result, err := curator.readRecentEvents(1 * time.Hour)
+
+	if err == nil {
+		t.Fatal("readRecentEvents should return scanner error for oversized line")
+	}
+	if !strings.Contains(err.Error(), "scanning events file") {
+		t.Errorf("error should mention scanning, got: %v", err)
+	}
+	// Partial results returned
+	if len(result) != 1 {
+		t.Errorf("expected 1 partial result before scanner error, got %d", len(result))
 	}
 }

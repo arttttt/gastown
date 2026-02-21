@@ -129,10 +129,14 @@ func write(event Event) error {
 	if err != nil {
 		return fmt.Errorf("opening events file: %w", err)
 	}
-	defer f.Close()
 
 	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("writing event: %w", err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing events file: %w", err)
 	}
 
 	return nil
