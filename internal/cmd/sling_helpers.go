@@ -626,6 +626,16 @@ func nudgeRefinery(rigName, message string) {
 		return // Don't actually nudge tmux in tests
 	}
 
+	// Emit a file event so the refinery's await-event unblocks instantly.
+	// This is the programmatic bridge between mq submit and the event system.
+	townRoot, _ := workspace.FindFromCwd()
+	if townRoot != "" {
+		_, _ = EmitEventToTown(townRoot, "refinery", "MQ_SUBMIT", []string{
+			"source=sling",
+			"message=" + message,
+		})
+	}
+
 	t := tmux.NewTmux()
 	if err := t.NudgeSession(refinerySession, message); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to nudge refinery %s: %v\n", refinerySession, err)
