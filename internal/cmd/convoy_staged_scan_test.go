@@ -10,7 +10,7 @@ import (
 
 // TestStrandedScanExcludesStagedConvoys verifies that findStrandedConvoys
 // queries bd with --status=open, which inherently excludes staged convoys
-// (status "staged:ready" or "staged:warnings").
+// (status "staged_ready" or "staged_warnings").
 //
 // This is a safety-net test for bead gt-csl.5.2: the stranded scan is safe
 // by construction because it only queries open convoys, but we want a test
@@ -115,9 +115,9 @@ exit 0
 	}
 
 	// 3. Verify that --status=open would NOT match staged statuses.
-	//    This is a string-level assertion: "staged:ready" != "open" and
-	//    "staged:warnings" != "open".
-	stagedStatuses := []string{"staged:ready", "staged:warnings"}
+	//    This is a string-level assertion: "staged_ready" != "open" and
+	//    "staged_warnings" != "open".
+	stagedStatuses := []string{"staged_ready", "staged_warnings"}
 	for _, ss := range stagedStatuses {
 		if ss == "open" {
 			t.Errorf("staged status %q equals 'open' — stranded scan would include staged convoys!", ss)

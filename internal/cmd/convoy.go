@@ -82,8 +82,8 @@ var (
 const (
 	convoyStatusOpen           = "open"
 	convoyStatusClosed         = "closed"
-	convoyStatusStagedReady    = "staged:ready"
-	convoyStatusStagedWarnings = "staged:warnings"
+	convoyStatusStagedReady    = "staged_ready"
+	convoyStatusStagedWarnings = "staged_warnings"
 )
 
 func normalizeConvoyStatus(status string) string {
@@ -108,7 +108,7 @@ func ensureKnownConvoyStatus(status string) error {
 
 // isStagedStatus reports whether the given normalized status is a staged status.
 func isStagedStatus(status string) bool {
-	return strings.HasPrefix(status, "staged:")
+	return strings.HasPrefix(status, "staged_")
 }
 
 func validateConvoyStatusTransition(currentStatus, targetStatus string) error {
@@ -141,7 +141,7 @@ func validateConvoyStatusTransition(currentStatus, targetStatus string) error {
 		return nil
 	}
 
-	// REJECT: open → staged:* and closed → staged:* are not allowed.
+	// REJECT: open → staged_* and closed → staged_* are not allowed.
 	// (Falls through to the error below.)
 
 	return fmt.Errorf("illegal convoy status transition %q -> %q", currentStatus, targetStatus)

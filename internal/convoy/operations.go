@@ -110,14 +110,14 @@ func isConvoyClosed(ctx context.Context, store beadsdk.Storage, convoyID string)
 }
 
 // isConvoyStaged checks if a convoy is in a staged state (not yet launched).
-// Staged convoys have statuses like "staged:ready" or "staged:warnings".
+// Staged convoys have statuses like "staged_ready" or "staged_warnings".
 // They should not be fed until they are launched (transitioned to "open").
 func isConvoyStaged(ctx context.Context, store beadsdk.Storage, convoyID string) bool {
 	issue, err := store.GetIssue(ctx, convoyID)
 	if err != nil || issue == nil {
 		return false // fail-open: if we can't read, assume not staged
 	}
-	return strings.HasPrefix(string(issue.Status), "staged:")
+	return strings.HasPrefix(string(issue.Status), "staged_")
 }
 
 // runConvoyCheck runs `gt convoy check <convoy-id>` to check a specific convoy.

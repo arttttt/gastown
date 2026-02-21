@@ -15,7 +15,7 @@ Safety-critical feeder guards are in PR [#1759](https://github.com/steveyegge/ga
 | Convoy-manager-rewrite | **Merged** (upstream/main) | Multi-rig event polling, continuation feeding, stranded scan auto-dispatch, observer consolidation, process group isolation |
 | Feeder safety guards | **PR [#1759](https://github.com/steveyegge/gastown/pull/1759)** (open) | Type filtering (`IsSlingableType`), blocks dep checking (`isIssueBlocked`), dispatch failure iteration |
 | Capacity plumbing | Deferred | `isRigAtCapacity` callback — no runtime effect until Phase 2 commands exist |
-| Staged statuses | Deferred | `staged:ready`, `staged:warnings` — no command creates them yet |
+| Staged statuses | Deferred | `staged_ready`, `staged_warnings` — no command creates them yet |
 
 Three PRDs written:
 
@@ -258,7 +258,7 @@ filter types for staged convoys to work correctly).
 - `gt convoy launch <convoy-id>` — activates convoy, dispatches Wave 1
 - Epic status management (open → in_progress → closed)
 - Integration branch awareness (warnings when missing)
-- Staged status transitions (staged:ready ↔ staged:warnings → open)
+- Staged status transitions (staged_ready ↔ staged_warnings → open)
 
 **Key design decisions already made:**
 - `parent-child` is organizational only, never blocking (aligned with

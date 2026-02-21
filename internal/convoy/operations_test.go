@@ -1021,7 +1021,7 @@ func TestDispatchIssue_Failure(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DS-07: CheckConvoysForIssue skips staged:ready convoys
+// DS-07: CheckConvoysForIssue skips staged_ready convoys
 // ---------------------------------------------------------------------------
 
 func TestCheckConvoysForIssue_SkipsStagedReady(t *testing.T) {
@@ -1032,7 +1032,7 @@ func TestCheckConvoysForIssue_SkipsStagedReady(t *testing.T) {
 	now := time.Now().UTC()
 
 	// Create a convoy as open first (SDK validates status on create),
-	// then transition to "staged:ready" via UpdateIssue.
+	// then transition to "staged_ready" via UpdateIssue.
 	convoy := &beadsdk.Issue{
 		ID:        "test-cv-staged1",
 		Title:     "Staged Ready Convoy",
@@ -1059,12 +1059,12 @@ func TestCheckConvoysForIssue_SkipsStagedReady(t *testing.T) {
 		}
 	}
 
-	// Transition convoy to "staged:ready" (SDK validates status on create,
+	// Transition convoy to "staged_ready" (SDK validates status on create,
 	// so we create as open first and update).
 	if err := store.UpdateIssue(ctx, convoy.ID, map[string]interface{}{
-		"status": "staged:ready",
+		"status": "staged_ready",
 	}, "test"); err != nil {
-		t.Fatalf("UpdateIssue to staged:ready: %v", err)
+		t.Fatalf("UpdateIssue to staged_ready: %v", err)
 	}
 
 	// Add tracks dependency: convoy tracks the closed issue
@@ -1112,7 +1112,7 @@ func TestCheckConvoysForIssue_SkipsStagedReady(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DS-08: CheckConvoysForIssue skips staged:warnings convoys
+// DS-08: CheckConvoysForIssue skips staged_warnings convoys
 // ---------------------------------------------------------------------------
 
 func TestCheckConvoysForIssue_SkipsStagedWarnings(t *testing.T) {
@@ -1122,7 +1122,7 @@ func TestCheckConvoysForIssue_SkipsStagedWarnings(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// Create a convoy as open first, then transition to "staged:warnings".
+	// Create a convoy as open first, then transition to "staged_warnings".
 	convoy := &beadsdk.Issue{
 		ID:        "test-cv-staged2",
 		Title:     "Staged Warnings Convoy",
@@ -1148,11 +1148,11 @@ func TestCheckConvoysForIssue_SkipsStagedWarnings(t *testing.T) {
 		}
 	}
 
-	// Transition convoy to "staged:warnings"
+	// Transition convoy to "staged_warnings"
 	if err := store.UpdateIssue(ctx, convoy.ID, map[string]interface{}{
-		"status": "staged:warnings",
+		"status": "staged_warnings",
 	}, "test"); err != nil {
-		t.Fatalf("UpdateIssue to staged:warnings: %v", err)
+		t.Fatalf("UpdateIssue to staged_warnings: %v", err)
 	}
 
 	dep := &beadsdk.Dependency{
@@ -1197,7 +1197,7 @@ func TestCheckConvoysForIssue_SkipsStagedWarnings(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DS-10: After staged:ready→open transition, daemon feeds normally
+// DS-10: After staged_ready→open transition, daemon feeds normally
 // ---------------------------------------------------------------------------
 
 func TestCheckConvoysForIssue_FeedsAfterStagedToOpenTransition(t *testing.T) {
@@ -1211,7 +1211,7 @@ func TestCheckConvoysForIssue_FeedsAfterStagedToOpenTransition(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	// Create a convoy as open first, then transition to "staged:ready"
+	// Create a convoy as open first, then transition to "staged_ready"
 	convoy := &beadsdk.Issue{
 		ID:        "test-cv-launch",
 		Title:     "Launched Convoy",
@@ -1238,11 +1238,11 @@ func TestCheckConvoysForIssue_FeedsAfterStagedToOpenTransition(t *testing.T) {
 		}
 	}
 
-	// Transition convoy to "staged:ready"
+	// Transition convoy to "staged_ready"
 	if err := store.UpdateIssue(ctx, convoy.ID, map[string]interface{}{
-		"status": "staged:ready",
+		"status": "staged_ready",
 	}, "test"); err != nil {
-		t.Fatalf("UpdateIssue to staged:ready: %v", err)
+		t.Fatalf("UpdateIssue to staged_ready: %v", err)
 	}
 
 	dep := &beadsdk.Dependency{

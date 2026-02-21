@@ -868,20 +868,20 @@ func TestCategorize_NoRigIsError(t *testing.T) {
 	}
 }
 
-// U-25: No errors + no warnings → staged:ready
+// U-25: No errors + no warnings → staged_ready
 func TestChooseStatus_Ready(t *testing.T) {
 	status := chooseStatus(nil, nil)
-	if status != "staged:ready" {
-		t.Errorf("expected staged:ready, got %q", status)
+	if status != "staged_ready" {
+		t.Errorf("expected staged_ready, got %q", status)
 	}
 }
 
-// U-26: Warnings only → staged:warnings
+// U-26: Warnings only → staged_warnings
 func TestChooseStatus_Warnings(t *testing.T) {
 	warns := []StagingFinding{{Severity: "warning", Category: "parked-rig"}}
 	status := chooseStatus(nil, warns)
-	if status != "staged:warnings" {
-		t.Errorf("expected staged:warnings, got %q", status)
+	if status != "staged_warnings" {
+		t.Errorf("expected staged_warnings, got %q", status)
 	}
 }
 
@@ -1449,10 +1449,10 @@ func TestRenderWarnings_Empty(t *testing.T) {
 // Staged convoy creation tests (gt-csl.3.5)
 // ---------------------------------------------------------------------------
 
-// IT-10: Stage clean (no errors, no warnings) → creates convoy as staged:ready.
+// IT-10: Stage clean (no errors, no warnings) → creates convoy as staged_ready.
 // Uses dagBuilder to set up the bd stub environment. Builds a clean ConvoyDAG
 // directly (with rigs set). Verifies `bd create` was called with
-// --status=staged:ready and `bd dep add` was called for each slingable bead.
+// --status=staged_ready and `bd dep add` was called for each slingable bead.
 func TestCreateStagedConvoy_CleanReady(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping on windows — shell stubs")
@@ -1484,8 +1484,8 @@ func TestCreateStagedConvoy_CleanReady(t *testing.T) {
 	errs, warns := categorizeFindings(append(errFindings, warnFindings...))
 	status := chooseStatus(errs, warns)
 
-	if status != "staged:ready" {
-		t.Fatalf("expected staged:ready, got %q", status)
+	if status != "staged_ready" {
+		t.Fatalf("expected staged_ready, got %q", status)
 	}
 
 	waves, err := computeWaves(convoyDAG)
@@ -1505,7 +1505,7 @@ func TestCreateStagedConvoy_CleanReady(t *testing.T) {
 		t.Errorf("convoy ID should start with hq-cv-, got %q", convoyID)
 	}
 
-	// Read bd.log and verify bd create was called with --status=staged:ready.
+	// Read bd.log and verify bd create was called with --status=staged_ready.
 	logBytes, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatalf("read bd.log: %v", err)
@@ -1515,8 +1515,8 @@ func TestCreateStagedConvoy_CleanReady(t *testing.T) {
 	if !strings.Contains(logContent, "create") {
 		t.Errorf("bd.log should contain 'create' command, got:\n%s", logContent)
 	}
-	if !strings.Contains(logContent, "--status=staged:ready") {
-		t.Errorf("bd.log should contain '--status=staged:ready', got:\n%s", logContent)
+	if !strings.Contains(logContent, "--status=staged_ready") {
+		t.Errorf("bd.log should contain '--status=staged_ready', got:\n%s", logContent)
 	}
 
 	// Verify bd dep add was called for each slingable bead.
@@ -1555,7 +1555,7 @@ func TestCreateStagedConvoy_TracksOnlySlingable(t *testing.T) {
 		t.Fatalf("computeWaves: %v", err)
 	}
 
-	convoyID, err := createStagedConvoy(convoyDAG, waves, "staged:ready")
+	convoyID, err := createStagedConvoy(convoyDAG, waves, "staged_ready")
 	if err != nil {
 		t.Fatalf("createStagedConvoy: %v", err)
 	}
@@ -1608,7 +1608,7 @@ func TestCreateStagedConvoy_DescriptionFormat(t *testing.T) {
 		t.Fatalf("computeWaves: %v", err)
 	}
 
-	_, err = createStagedConvoy(convoyDAG, waves, "staged:ready")
+	_, err = createStagedConvoy(convoyDAG, waves, "staged_ready")
 	if err != nil {
 		t.Fatalf("createStagedConvoy: %v", err)
 	}
@@ -1670,7 +1670,7 @@ func TestCreateStagedConvoy_IDFormat(t *testing.T) {
 		t.Fatalf("computeWaves: %v", err)
 	}
 
-	convoyID, err := createStagedConvoy(convoyDAG, waves, "staged:ready")
+	convoyID, err := createStagedConvoy(convoyDAG, waves, "staged_ready")
 	if err != nil {
 		t.Fatalf("createStagedConvoy: %v", err)
 	}
@@ -1701,7 +1701,7 @@ func TestCreateStagedConvoy_IDFormat(t *testing.T) {
 
 // IT-13: Re-stage existing staged convoy updates in place (no duplicate).
 //
-// 1. Set up a DAG with a convoy that has status "staged:ready" and tracks 2 tasks.
+// 1. Set up a DAG with a convoy that has status "staged_ready" and tracks 2 tasks.
 // 2. Call updateStagedConvoy (the re-stage path).
 // 3. Verify: bd.log shows `bd update <convoy-id>` was called (not `bd create`).
 // 4. Verify: no duplicate convoy was created.
@@ -1711,10 +1711,10 @@ func TestRestageConvoy_UpdatesInPlace(t *testing.T) {
 		t.Skip("skipping on windows — shell stubs")
 	}
 
-	// Build a DAG with a convoy already in "staged:ready" status,
+	// Build a DAG with a convoy already in "staged_ready" status,
 	// tracking two tasks.
 	testDAG := newTestDAG(t).
-		Convoy("hq-cv-test1", "Staged Convoy").WithStatus("staged:ready").
+		Convoy("hq-cv-test1", "Staged Convoy").WithStatus("staged_ready").
 		Task("gt-x1", "Task X1", withRig("gastown")).TrackedBy("hq-cv-test1").
 		Task("gt-x2", "Task X2", withRig("gastown")).TrackedBy("hq-cv-test1").BlockedBy("gt-x1")
 
@@ -1734,7 +1734,7 @@ func TestRestageConvoy_UpdatesInPlace(t *testing.T) {
 	}
 
 	// Call updateStagedConvoy — the re-stage path.
-	err = updateStagedConvoy("hq-cv-test1", convoyDAG, waves, "staged:ready")
+	err = updateStagedConvoy("hq-cv-test1", convoyDAG, waves, "staged_ready")
 	if err != nil {
 		t.Fatalf("updateStagedConvoy: %v", err)
 	}
@@ -1746,12 +1746,12 @@ func TestRestageConvoy_UpdatesInPlace(t *testing.T) {
 	}
 	logContent := string(logBytes)
 
-	// Verify: bd update was called with --status=staged:ready.
+	// Verify: bd update was called with --status=staged_ready.
 	if !strings.Contains(logContent, "update hq-cv-test1") {
 		t.Errorf("bd.log should contain 'update hq-cv-test1', got:\n%s", logContent)
 	}
-	if !strings.Contains(logContent, "--status=staged:ready") {
-		t.Errorf("bd.log should contain '--status=staged:ready', got:\n%s", logContent)
+	if !strings.Contains(logContent, "--status=staged_ready") {
+		t.Errorf("bd.log should contain '--status=staged_ready', got:\n%s", logContent)
 	}
 
 	// Verify: NO bd create was called.
@@ -1782,14 +1782,14 @@ func TestRestageConvoy_UpdatesInPlace(t *testing.T) {
 }
 
 // IT-13b: Re-stage detection logic correctly identifies already-staged convoys.
-// Verifies the re-stage flag is set when input convoy has "staged:" prefix status.
+// Verifies the re-stage flag is set when input convoy has "staged_" prefix status.
 func TestRestageConvoy_DetectionLogic(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping on windows — shell stubs")
 	}
 
 	testDAG := newTestDAG(t).
-		Convoy("hq-cv-det", "Detection Convoy").WithStatus("staged:ready").
+		Convoy("hq-cv-det", "Detection Convoy").WithStatus("staged_ready").
 		Task("gt-d1", "Detection Task 1", withRig("gastown")).TrackedBy("hq-cv-det").
 		Task("gt-d2", "Detection Task 2", withRig("gastown")).TrackedBy("hq-cv-det")
 
@@ -1806,14 +1806,14 @@ func TestRestageConvoy_DetectionLogic(t *testing.T) {
 		t.Fatalf("expected convoy type, got %q", result.IssueType)
 	}
 
-	// Verify status is "staged:ready".
-	if result.Status != "staged:ready" {
-		t.Fatalf("expected status 'staged:ready', got %q", result.Status)
+	// Verify status is "staged_ready".
+	if result.Status != "staged_ready" {
+		t.Fatalf("expected status 'staged_ready', got %q", result.Status)
 	}
 
-	// Verify the detection logic: status starts with "staged:".
-	if !strings.HasPrefix(result.Status, "staged:") {
-		t.Errorf("expected status to start with 'staged:', got %q", result.Status)
+	// Verify the detection logic: status starts with "staged_".
+	if !strings.HasPrefix(result.Status, "staged_") {
+		t.Errorf("expected status to start with 'staged_', got %q", result.Status)
 	}
 
 	// Verify resolveInputKind classifies as convoy.
@@ -1828,14 +1828,14 @@ func TestRestageConvoy_DetectionLogic(t *testing.T) {
 }
 
 // IT-13c: Re-stage with different status updates correctly.
-// Verifies updateStagedConvoy can set staged:warnings status.
+// Verifies updateStagedConvoy can set staged_warnings status.
 func TestRestageConvoy_UpdatesStatusToWarnings(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping on windows — shell stubs")
 	}
 
 	testDAG := newTestDAG(t).
-		Convoy("hq-cv-warn", "Warn Convoy").WithStatus("staged:ready").
+		Convoy("hq-cv-warn", "Warn Convoy").WithStatus("staged_ready").
 		Task("gt-w1", "Warn Task 1", withRig("gastown")).TrackedBy("hq-cv-warn").
 		Task("bd-w2", "Warn Task 2", withRig("beads")).TrackedBy("hq-cv-warn")
 
@@ -1852,8 +1852,8 @@ func TestRestageConvoy_UpdatesStatusToWarnings(t *testing.T) {
 		t.Fatalf("computeWaves: %v", err)
 	}
 
-	// Call updateStagedConvoy with staged:warnings status.
-	err = updateStagedConvoy("hq-cv-warn", convoyDAG, waves, "staged:warnings")
+	// Call updateStagedConvoy with staged_warnings status.
+	err = updateStagedConvoy("hq-cv-warn", convoyDAG, waves, "staged_warnings")
 	if err != nil {
 		t.Fatalf("updateStagedConvoy: %v", err)
 	}
@@ -1864,9 +1864,9 @@ func TestRestageConvoy_UpdatesStatusToWarnings(t *testing.T) {
 	}
 	logContent := string(logBytes)
 
-	// Status should be updated to staged:warnings.
-	if !strings.Contains(logContent, "--status=staged:warnings") {
-		t.Errorf("re-stage with warnings should set --status=staged:warnings, got:\n%s", logContent)
+	// Status should be updated to staged_warnings.
+	if !strings.Contains(logContent, "--status=staged_warnings") {
+		t.Errorf("re-stage with warnings should set --status=staged_warnings, got:\n%s", logContent)
 	}
 
 	// No create command should be in the log.
@@ -1899,7 +1899,7 @@ func TestJSONOutput_ValidWithAllFields(t *testing.T) {
 	}
 
 	result := StageResult{
-		Status:   "staged:ready",
+		Status:   "staged_ready",
 		ConvoyID: "hq-cv-test1",
 		Errors:   buildFindingsJSON(nil),
 		Warnings: buildFindingsJSON(nil),
@@ -1919,8 +1919,8 @@ func TestJSONOutput_ValidWithAllFields(t *testing.T) {
 	}
 
 	// All required fields present.
-	if parsed.Status != "staged:ready" {
-		t.Errorf("status = %q, want %q", parsed.Status, "staged:ready")
+	if parsed.Status != "staged_ready" {
+		t.Errorf("status = %q, want %q", parsed.Status, "staged_ready")
 	}
 	if parsed.ConvoyID != "hq-cv-test1" {
 		t.Errorf("convoy_id = %q, want %q", parsed.ConvoyID, "hq-cv-test1")
@@ -2209,7 +2209,7 @@ func TestJSONOutput_FullStructureSnapshot(t *testing.T) {
 	}
 
 	result := StageResult{
-		Status:   "staged:warnings",
+		Status:   "staged_warnings",
 		ConvoyID: "hq-cv-snap1",
 		Errors:   buildFindingsJSON(nil),
 		Warnings: buildFindingsJSON(warns),

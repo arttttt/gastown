@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/gastown/internal/workspace"
 )
 
 // convoyLaunchForce controls whether to launch a convoy with warnings.
@@ -46,9 +47,9 @@ func init() {
 }
 
 // transitionConvoyToOpen transitions a staged convoy to open status.
-// If the convoy is staged:ready, it transitions unconditionally.
-// If the convoy is staged:warnings and force is true, it transitions.
-// If the convoy is staged:warnings and force is false, it returns an error.
+// If the convoy is staged_ready, it transitions unconditionally.
+// If the convoy is staged_warnings and force is true, it transitions.
+// If the convoy is staged_warnings and force is false, it returns an error.
 // If the convoy is already open or closed, it returns an error.
 func transitionConvoyToOpen(convoyID string, force bool) error {
 	result, err := bdShow(convoyID)
@@ -93,7 +94,7 @@ func bdUpdateStatus(beadID, status string) error {
 // Individual task failures do not abort remaining dispatches (I-14).
 // Returns a result for every Wave 1 task and a non-nil error only if waves
 // are empty or contain no Wave 1.
-func dispatchWave1(convoyID string, dag *ConvoyDAG, waves []Wave) ([]DispatchResult, error) {
+func dispatchWave1(convoyID string, dag *ConvoyDAG, waves []Wave, townRoot string) ([]DispatchResult, error) {
 	if len(waves) == 0 {
 		return nil, fmt.Errorf("convoy %s: no waves to dispatch", convoyID)
 	}
@@ -111,7 +112,7 @@ func dispatchWave1(convoyID string, dag *ConvoyDAG, waves []Wave) ([]DispatchRes
 			rig = node.Rig
 		}
 
-		err := dispatchTaskDirect("", taskID, rig)
+		err := dispatchTaskDirect(townRoot, taskID, rig)
 		results = append(results, DispatchResult{
 			BeadID:  taskID,
 			Rig:     rig,
@@ -237,7 +238,12 @@ func runConvoyLaunch(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("compute waves for dispatch: %w", err)
 			}
 
-			results, err := dispatchWave1(convoyID, dag, waves)
+			townRoot, err := workspace.FindFromCwdOrError()
+			if err != nil {
+				return fmt.Errorf("resolve town root for dispatch: %w", err)
+			}
+
+			results, err := dispatchWave1(convoyID, dag, waves, townRoot)
 			if err != nil {
 				return fmt.Errorf("dispatch wave 1: %w", err)
 			}

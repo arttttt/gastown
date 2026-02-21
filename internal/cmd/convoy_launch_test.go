@@ -17,7 +17,7 @@ func TestTransitionConvoyToOpen_StagedReady(t *testing.T) {
 	}
 
 	dag := newTestDAG(t).
-		Convoy("hq-cv-test", "Test").WithStatus("staged:ready")
+		Convoy("hq-cv-test", "Test").WithStatus("staged_ready")
 
 	_, logPath := dag.Setup(t)
 
@@ -50,13 +50,13 @@ func TestTransitionConvoyToOpen_StagedWarningsNoForce(t *testing.T) {
 	}
 
 	dag := newTestDAG(t).
-		Convoy("hq-cv-warn", "Warnings Convoy").WithStatus("staged:warnings")
+		Convoy("hq-cv-warn", "Warnings Convoy").WithStatus("staged_warnings")
 
 	dag.Setup(t)
 
 	err := transitionConvoyToOpen("hq-cv-warn", false)
 	if err == nil {
-		t.Fatal("expected error for staged:warnings without force, got nil")
+		t.Fatal("expected error for staged_warnings without force, got nil")
 	}
 
 	if !strings.Contains(err.Error(), "force") {
@@ -74,7 +74,7 @@ func TestTransitionConvoyToOpen_StagedWarningsWithForce(t *testing.T) {
 	}
 
 	dag := newTestDAG(t).
-		Convoy("hq-cv-forcew", "Force Warnings").WithStatus("staged:warnings")
+		Convoy("hq-cv-forcew", "Force Warnings").WithStatus("staged_warnings")
 
 	_, logPath := dag.Setup(t)
 
@@ -291,7 +291,7 @@ func TestTransitionConvoyToOpen_SkipsReanalysis(t *testing.T) {
 	}
 
 	dag := newTestDAG(t).
-		Convoy("hq-cv-noanal", "No Reanalysis").WithStatus("staged:ready")
+		Convoy("hq-cv-noanal", "No Reanalysis").WithStatus("staged_ready")
 
 	_, logPath := dag.Setup(t)
 
@@ -355,7 +355,7 @@ func TestDispatchWave1_AllDispatched(t *testing.T) {
 	}
 	t.Cleanup(func() { dispatchTaskDirect = orig })
 
-	results, err := dispatchWave1("test-convoy", dag, waves)
+	results, err := dispatchWave1("test-convoy", dag, waves, "")
 	if err != nil {
 		t.Fatalf("dispatchWave1: %v", err)
 	}
@@ -415,7 +415,7 @@ func TestDispatchWave1_ContinuesOnFailure(t *testing.T) {
 	}
 	t.Cleanup(func() { dispatchTaskDirect = orig })
 
-	results, err := dispatchWave1("test-convoy", dag, waves)
+	results, err := dispatchWave1("test-convoy", dag, waves, "")
 	if err != nil {
 		t.Fatalf("dispatchWave1: %v", err)
 	}
@@ -643,7 +643,7 @@ func TestRenderLaunchOutput_Snapshot(t *testing.T) {
 	}
 }
 
-// IT-23: End-to-end test — staged:ready convoy with tracked tasks → transition
+// IT-23: End-to-end test — staged_ready convoy with tracked tasks → transition
 // → rebuild DAG → dispatch Wave 1. Uses bd stub + dispatchTaskDirect stub.
 func TestDispatchWave1_EndToEnd(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -653,7 +653,7 @@ func TestDispatchWave1_EndToEnd(t *testing.T) {
 	// Build a convoy tracking 3 tasks: A blocks B, C independent.
 	// Wave 1 = [A, C], Wave 2 = [B].
 	td := newTestDAG(t).
-		Convoy("hq-cv-e2e", "E2E Launch").WithStatus("staged:ready").
+		Convoy("hq-cv-e2e", "E2E Launch").WithStatus("staged_ready").
 		Task("hq-task-a", "Task A", withRig("gastown")).TrackedBy("hq-cv-e2e").
 		Task("hq-task-b", "Task B", withRig("gastown")).TrackedBy("hq-cv-e2e").BlockedBy("hq-task-a").
 		Task("hq-task-c", "Task C", withRig("gastown")).TrackedBy("hq-cv-e2e")
@@ -684,7 +684,7 @@ func TestDispatchWave1_EndToEnd(t *testing.T) {
 		t.Fatalf("computeWaves: %v", err)
 	}
 
-	results, err := dispatchWave1("hq-cv-e2e", dag, waves)
+	results, err := dispatchWave1("hq-cv-e2e", dag, waves, "")
 	if err != nil {
 		t.Fatalf("dispatchWave1: %v", err)
 	}

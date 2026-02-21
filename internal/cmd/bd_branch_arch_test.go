@@ -482,6 +482,8 @@ var expectedExecBdCounts = map[string]int{
 	"close.go":               1,
 	"compact_report.go":      3,
 	"convoy.go":              24,
+	"convoy_launch.go":       1,
+	"convoy_stage.go":        7,
 	"costs.go":               9,
 	"crew_lifecycle.go":      4,
 	"deacon.go":              2,

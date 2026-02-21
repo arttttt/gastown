@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/convoy"
 	"github.com/steveyegge/gastown/internal/workspace"
 )
 
@@ -33,7 +34,7 @@ func init() {
 
 // StageResult is the top-level JSON output for gt convoy stage --json.
 type StageResult struct {
-	Status   string         `json:"status"`    // "staged:ready", "staged:warnings", or "error"
+	Status   string         `json:"status"`    // "staged_ready", "staged_warnings", or "error"
 	ConvoyID string         `json:"convoy_id"` // empty if errors prevented creation
 	Errors   []FindingJSON  `json:"errors"`
 	Warnings []FindingJSON  `json:"warnings"`
@@ -223,7 +224,7 @@ func runConvoyStage(cmd *cobra.Command, args []string) error {
 	restageConvoyID := ""
 	if input.Kind == StageInputConvoy {
 		convoyResult := beadResults[input.IDs[0]]
-		if strings.HasPrefix(convoyResult.Status, "staged:") {
+		if strings.HasPrefix(convoyResult.Status, "staged_") {
 			isRestage = true
 			restageConvoyID = input.IDs[0]
 		}
@@ -557,15 +558,10 @@ type Wave struct {
 	Tasks  []string // bead IDs, sorted for determinism
 }
 
-// isSlingableType returns true if the bead type can be dispatched as work.
-// Epics, decisions, and similar container types are not slingable.
+// isSlingableType delegates to the canonical convoy.IsSlingableType, which
+// handles empty types (legacy beads that default to "task").
 func isSlingableType(beadType string) bool {
-	switch beadType {
-	case "task", "bug", "feature", "chore":
-		return true
-	default:
-		return false
-	}
+	return convoy.IsSlingableType(beadType)
 }
 
 // computeWaves assigns each slingable task to an execution wave using Kahn's algorithm.
@@ -778,9 +774,9 @@ func chooseStatus(errors, warnings []StagingFinding) string {
 		return "" // no convoy
 	}
 	if len(warnings) > 0 {
-		return "staged:warnings"
+		return "staged_warnings"
 	}
-	return "staged:ready"
+	return "staged_ready"
 }
 
 // renderErrors formats error findings for console output.

@@ -15,7 +15,7 @@ Testing plan for `gt convoy stage` and `gt convoy launch` (PRD: `stage-launch/pr
 | I-5 | `parent-child` deps NEVER create execution edges | data | **high** | partial (feeder tests) |
 | I-6 | Epics and non-slingable types are NEVER placed in waves | data | **high** | partial (`IsSlingableType`) |
 | I-7 | Daemon MUST NOT feed issues from `staged:*` convoys | safety | **high** | no |
-| I-8 | `--launch` on `staged:warnings` MUST require `--force` | safety | medium | no |
+| I-8 | `--launch` on `staged_warnings` MUST require `--force` | safety | medium | no |
 | I-9 | Re-staging a convoy MUST NOT create duplicates | data | medium | no |
 | I-10 | `--json` output MUST be parseable JSON on stdout | data | medium | no |
 | I-11 | Wave computation is deterministic for the same input DAG | data | medium | no |
@@ -110,8 +110,8 @@ These test pure logic in isolation using in-memory data. No Dolt, no bd stubs.
 | U-22 | Error categorization: parked rig is warning | `categorize(findings)` | -- | -- | P1 |
 | U-23 | Error categorization: orphan is warning | `categorize(findings)` | -- | -- | P1 |
 | U-24 | Error categorization: missing integration branch is warning | `categorize(findings)` | -- | -- | P2 |
-| U-25 | Status selection: no errors + no warnings -> staged:ready | `chooseStatus(errs, warns)` | -- | I-3 | P0 |
-| U-26 | Status selection: warnings only -> staged:warnings | `chooseStatus(errs, warns)` | -- | -- | P0 |
+| U-25 | Status selection: no errors + no warnings -> staged_ready | `chooseStatus(errs, warns)` | -- | I-3 | P0 |
+| U-26 | Status selection: warnings only -> staged_warnings | `chooseStatus(errs, warns)` | -- | -- | P0 |
 | U-27 | Status selection: any error -> no creation | `chooseStatus(errs, warns)` | -- | I-3 | P0 |
 | U-28 | Tree display: flat task list -> no tree, just list | `renderTree(dag)` | -- | -- | P2 |
 | U-29 | Tree display: epic with nested sub-epics | `renderTree(dag)` | -- | -- | P2 |
@@ -139,15 +139,15 @@ These test the full command flow with stubbed `bd` and `gt` binaries.
 | IT-05 | Stage with cycle: refuses to create convoy | US-002 | F-07 | I-1, I-3 | P0 |
 | IT-06 | Stage with no valid rig: refuses to create convoy | US-002 | F-23 | I-2, I-3 | P0 |
 | IT-07 | Stage with errors: exit code non-zero, no bd create called | US-002 | -- | I-3 | P0 |
-| IT-08 | Stage with parked rig: creates convoy as staged:warnings | US-003 | F-19 | -- | P1 |
-| IT-09 | Stage epic with unreachable task (not in descendant tree): warns, creates staged:warnings | US-003 | F-08 | -- | P1 |
-| IT-10 | Stage clean: creates convoy as staged:ready | US-007 | -- | -- | P0 |
+| IT-08 | Stage with parked rig: creates convoy as staged_warnings | US-003 | F-19 | -- | P1 |
+| IT-09 | Stage epic with unreachable task (not in descendant tree): warns, creates staged_warnings | US-003 | F-08 | -- | P1 |
+| IT-10 | Stage clean: creates convoy as staged_ready | US-007 | -- | -- | P0 |
 | IT-11 | Stage convoy: tracks all slingable beads via deps | US-007 | F-11 | -- | P0 |
 | IT-12 | Stage convoy: description includes wave count + timestamp | US-007 | -- | -- | P2 |
 | IT-13 | Re-stage: updates status, no duplicate convoy | US-007 | F-09 | I-9 | P1 |
-| IT-14 | Launch staged:ready: transitions to open, dispatches Wave 1 | US-008 | F-16 | I-13 | P0 |
-| IT-15 | Launch staged:warnings without --force: errors | US-008 | -- | I-8 | P0 |
-| IT-16 | Launch staged:warnings with --force: dispatches | US-008 | -- | I-8 | P1 |
+| IT-14 | Launch staged_ready: transitions to open, dispatches Wave 1 | US-008 | F-16 | I-13 | P0 |
+| IT-15 | Launch staged_warnings without --force: errors | US-008 | -- | I-8 | P0 |
+| IT-16 | Launch staged_warnings with --force: dispatches | US-008 | -- | I-8 | P1 |
 | IT-17 | Launch dispatch failure: continues to next task | US-008 | F-16 | I-14 | P1 |
 | IT-18 | Launch already-open convoy: errors | US-010 | F-05 | I-15 | P1 |
 | IT-19 | `gt convoy launch <epic>` = `gt convoy stage <epic> --launch` | US-010 | -- | -- | P1 |
@@ -157,14 +157,14 @@ These test the full command flow with stubbed `bd` and `gt` binaries.
 | IT-23 | Stage with --launch: full end-to-end (stage + dispatch) | US-008 | -- | I-4, I-13 | P0 |
 | IT-24 | Empty args: usage error | -- | F-02 | -- | P2 |
 | IT-25 | Flag-like bead ID: rejected | -- | F-06 | -- | P2 |
-| IT-26 | Stage with missing integration branch: warns, creates staged:warnings | US-003 | -- | -- | P1 |
+| IT-26 | Stage with missing integration branch: warns, creates staged_warnings | US-003 | -- | -- | P1 |
 | IT-27 | Stage with cross-rig routing mismatch: warns, includes in output | US-003 | -- | -- | P1 |
-| IT-28 | Stage with capacity warning: informational, creates staged:warnings | US-003 | -- | -- | P2 |
+| IT-28 | Stage with capacity warning: informational, creates staged_warnings | US-003 | -- | -- | P2 |
 | IT-29 | Launch output: convoy ID + `gt convoy status` command printed | US-009 | -- | -- | P1 |
 | IT-30 | Launch output: each dispatched task shows polecat name | US-009 | -- | -- | P1 |
 | IT-31 | Launch output: TUI hint (`gt convoy -i`) printed | US-009 | -- | -- | P2 |
 | IT-32 | Launch output: daemon feed explanation printed | US-009 | -- | -- | P2 |
-| IT-33 | Launch staged:ready convoy: skips re-analysis, dispatches directly | US-010 | -- | -- | P0 |
+| IT-33 | Launch staged_ready convoy: skips re-analysis, dispatches directly | US-010 | -- | -- | P0 |
 | IT-34 | --json with errors: non-zero exit code | US-011 | -- | I-3, I-10 | P1 |
 | IT-35 | Mixed input (epic + task IDs): errors with hint | -- | F-03 | -- | P1 |
 | IT-36 | Bead ID that looks like rig name: errors with hint | -- | F-04 | -- | P2 |
@@ -189,10 +189,10 @@ These test DAG walking and wave computation against a real beads store.
 | DS-04 | Wave computation with real deps: parallel + serial mixed | US-004 | -- | I-4 | P0 |
 | DS-05 | Cycle detection with real store: 2-node cycle | US-002 | F-07 | I-1 | P0 |
 | DS-06 | isIssueBlocked integration: blocked task not in Wave 1 | US-004 | -- | I-4 | P1 |
-| DS-07 | Event-driven path skips staged:ready convoy (`CheckConvoysForIssue` → `feedNextReadyIssue`) | US-007 | -- | I-7 | P0 |
-| DS-08 | Event-driven path skips staged:warnings convoy | US-007 | -- | I-7 | P0 |
+| DS-07 | Event-driven path skips staged_ready convoy (`CheckConvoysForIssue` → `feedNextReadyIssue`) | US-007 | -- | I-7 | P0 |
+| DS-08 | Event-driven path skips staged_warnings convoy | US-007 | -- | I-7 | P0 |
 | DS-09 | Stranded scan path excludes staged convoys (`findStrandedConvoys` queries `--status=open`) | US-007 | -- | I-7 | P0 |
-| DS-10 | Daemon feeds convoy after status transitions from staged:ready to open | US-008 | -- | I-7 | P1 |
+| DS-10 | Daemon feeds convoy after status transitions from staged_ready to open | US-008 | -- | I-7 | P1 |
 
 ### Snapshot tests (package `cmd`)
 
@@ -420,7 +420,7 @@ Every acceptance criterion in the PRD mapped to its covering test(s).
 | 4 | Cross-rig routing warnings | U-34, IT-27 |
 | 5 | Capacity estimation | U-35, IT-28 |
 | 6 | Warnings distinguished from errors | U-20..U-24 |
-| 7 | Warnings only -> staged:warnings | IT-08, U-26 |
+| 7 | Warnings only -> staged_warnings | IT-08, U-26 |
 
 ### US-004: Wave computation
 
@@ -450,14 +450,14 @@ Every acceptance criterion in the PRD mapped to its covering test(s).
 | 1 | Table: wave #, IDs, titles, rig, blockers | U-30, SN-02 |
 | 2 | Displayed after DAG tree | IT-40 |
 | 3 | Summary line: waves, tasks, parallelism | U-38, SN-02 |
-| 4 | Warnings after wave table for staged:warnings | SN-05 |
+| 4 | Warnings after wave table for staged_warnings | SN-05 |
 
 ### US-007: Convoy creation with staged status
 
 | AC | Criterion | Tests |
 |---|---|---|
-| 1 | No errors, no warnings -> staged:ready | IT-10, U-25 |
-| 2 | Warnings only -> staged:warnings | IT-08, U-26 |
+| 1 | No errors, no warnings -> staged_ready | IT-10, U-25 |
+| 2 | Warnings only -> staged_warnings | IT-08, U-26 |
 | 3 | Errors -> no convoy | IT-07, U-27 |
 | 4 | Tracks all slingable beads | IT-11 |
 | 5 | Description: wave count, task count, timestamp | IT-12 |
@@ -468,8 +468,8 @@ Every acceptance criterion in the PRD mapped to its covering test(s).
 
 | AC | Criterion | Tests |
 |---|---|---|
-| 1 | Transitions staged:ready -> open | IT-14 |
-| 2 | staged:warnings requires --force | IT-15, IT-16 |
+| 1 | Transitions staged_ready -> open | IT-14 |
+| 2 | staged_warnings requires --force | IT-15, IT-16 |
 | 3 | Dispatches Wave 1 via internal Go dispatch | IT-14, IT-23 |
 | 4 | Subsequent waves NOT dispatched | IT-14, IT-23 |
 | 5 | Dispatch failure continues | IT-17 |
@@ -490,8 +490,8 @@ Every acceptance criterion in the PRD mapped to its covering test(s).
 |---|---|---|
 | 1 | launch epic = stage epic --launch | IT-19 |
 | 2 | launch task1 task2 works | IT-20 |
-| 3 | launch staged:ready: no re-analysis | IT-33 |
-| 4 | launch staged:warnings requires --force | IT-15, IT-16 |
+| 3 | launch staged_ready: no re-analysis | IT-33 |
+| 4 | launch staged_warnings requires --force | IT-15, IT-16 |
 | 5 | launch already-open errors | IT-18 |
 
 ### US-011: JSON output

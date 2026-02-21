@@ -24,7 +24,7 @@ The core insight: staging is a pre-flight check that catches dependency cycles, 
 - Enable `gt convoy launch <convoy-id>` as an alias for `gt convoy stage <convoy-id> --launch`
 - Compute execution waves from blocks deps and display them alongside the DAG tree
 - Surface errors (cycles, invalid rigs) and warnings (parked rigs, missing branches, capacity) with clear categorization
-- Create staged convoys with `staged:ready` or `staged:warnings` status based on analysis results
+- Create staged convoys with `staged_ready` or `staged_warnings` status based on analysis results
 - On launch, dispatch only Wave 1 (unblocked) tasks; daemon feeds subsequent waves
 - Support `--json` for programmatic consumption (design-to-beads pipeline)
 
@@ -63,7 +63,7 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 
 ### US-003: Warning detection (allows staging with acknowledgment)
 
-**Description:** As a user, I want staging to surface non-fatal issues as warnings so that I can decide whether to fix them or proceed to launch with `--force`. (Note: `--force` is a launch-time flag, not a stage flag. Staging with warnings always creates a `staged:warnings` convoy; the decision point is at launch.)
+**Description:** As a user, I want staging to surface non-fatal issues as warnings so that I can decide whether to fix them or proceed to launch with `--force`. (Note: `--force` is a launch-time flag, not a stage flag. Staging with warnings always creates a `staged_warnings` convoy; the decision point is at launch.)
 
 **Acceptance Criteria:**
 - [ ] Orphan detection (epic input only): tasks not reachable from the epic's descendant tree, or tasks with no blocking deps from any other staged task (isolated in the wave graph). For task-list input, isolation is expected (all tasks are explicitly selected) — no orphan warning.
@@ -72,7 +72,7 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 - [ ] Cross-rig routing: beads that resolve to different rigs than expected
 - [ ] Capacity estimation: number of polecats needed per wave vs available capacity (informational)
 - [ ] Warnings are clearly distinguished from errors in output
-- [ ] When only warnings (no errors): convoy is created with `staged:warnings` status
+- [ ] When only warnings (no errors): convoy is created with `staged_warnings` status
 
 ### US-004: Wave computation
 
@@ -105,15 +105,15 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 - [ ] Table shows Wave number, task IDs, task titles, target rig, and blockers (if any)
 - [ ] Displayed after the DAG tree
 - [ ] Summary line: total waves, total tasks, estimated parallelism per wave
-- [ ] For `staged:warnings` convoys: warnings are printed after the wave table
+- [ ] For `staged_warnings` convoys: warnings are printed after the wave table
 
 ### US-007: Convoy creation with staged status
 
-**Description:** As a user, I want `gt convoy stage` to create a convoy with `staged:ready` or `staged:warnings` status, so that the convoy exists in beads and can be launched later.
+**Description:** As a user, I want `gt convoy stage` to create a convoy with `staged_ready` or `staged_warnings` status, so that the convoy exists in beads and can be launched later.
 
 **Acceptance Criteria:**
-- [ ] `staged:ready`: convoy created when analysis finds no errors and no warnings
-- [ ] `staged:warnings`: convoy created when analysis finds warnings but no errors
+- [ ] `staged_ready`: convoy created when analysis finds no errors and no warnings
+- [ ] `staged_warnings`: convoy created when analysis finds warnings but no errors
 - [ ] No convoy created when analysis finds errors
 - [ ] Convoy tracks all slingable beads in the analyzed set via `tracks` deps
 - [ ] Convoy description includes wave count, task count, and staging timestamp
@@ -125,8 +125,8 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 **Description:** As a user, I want `gt convoy stage --launch` (or `gt convoy launch`) to activate the convoy and dispatch all Wave 1 tasks, so that work begins immediately after validation.
 
 **Acceptance Criteria:**
-- [ ] Transitions convoy status from `staged:ready` to `open`
-- [ ] For `staged:warnings` convoys: requires `--force` flag to launch (otherwise errors with warning summary)
+- [ ] Transitions convoy status from `staged_ready` to `open`
+- [ ] For `staged_warnings` convoys: requires `--force` flag to launch (otherwise errors with warning summary)
 - [ ] Dispatches all Wave 1 tasks via internal Go dispatch functions (one polecat per task, no auto-convoy creation — the staged convoy already tracks these tasks)
 - [ ] Subsequent waves are NOT dispatched — the daemon feeds them as Wave 1 tasks close
 - [ ] If a Wave 1 dispatch fails, continues to next task (same as batch sling iteration behavior)
@@ -149,8 +149,8 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 **Acceptance Criteria:**
 - [ ] `gt convoy launch <epic-id>` = `gt convoy stage <epic-id> --launch`
 - [ ] `gt convoy launch <task1> <task2>` = `gt convoy stage <task1> <task2> --launch`
-- [ ] `gt convoy launch <convoy-id>` activates an already-staged convoy (no re-analysis needed if status is `staged:ready`)
-- [ ] `gt convoy launch <convoy-id>` on a `staged:warnings` convoy requires `--force`
+- [ ] `gt convoy launch <convoy-id>` activates an already-staged convoy (no re-analysis needed if status is `staged_ready`)
+- [ ] `gt convoy launch <convoy-id>` on a `staged_warnings` convoy requires `--force`
 - [ ] `gt convoy launch <convoy-id>` on an already-`open` convoy errors: "convoy is already launched"
 
 ### US-011: JSON output mode
@@ -159,7 +159,7 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 
 **Acceptance Criteria:**
 - [ ] `--json` flag outputs structured JSON to stdout
-- [ ] JSON includes: `errors` array, `warnings` array, `waves` array (each with task list), `tree` (nested structure), `convoy_id` (if created), `status` (staged:ready | staged:warnings | error)
+- [ ] JSON includes: `errors` array, `warnings` array, `waves` array (each with task list), `tree` (nested structure), `convoy_id` (if created), `status` (staged_ready | staged_warnings | error)
 - [ ] Human-readable output is suppressed when `--json` is used
 - [ ] Non-zero exit code on errors (same as non-JSON mode)
 
@@ -170,7 +170,7 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 - FR-3: Wave computation must use topological sort on the blocks/conditional-blocks/waits-for subgraph
 - FR-4: Cycle detection must use standard graph cycle detection (DFS with back-edge detection or Kahn's algorithm failure)
 - FR-5: Rig resolution must use existing `beads.ExtractPrefix` + `beads.GetRigNameForPrefix` infrastructure
-- FR-6: Staged convoy must use `bd create --type=convoy --status=staged:ready` (or staged:warnings)
+- FR-6: Staged convoy must use `bd create --type=convoy --status=staged_ready` (or staged_warnings)
 - FR-7: Launch must dispatch Wave 1 tasks by calling internal Go dispatch functions directly (not `gt sling` CLI). Using `gt sling` would create a separate auto-convoy per task via `createAutoConvoy`, duplicating the staged convoy. The internal dispatch path reuses the sling command's core logic (rig resolution, polecat spawning) without convoy creation overhead.
 - FR-8: Re-staging an existing convoy must update its status and re-compute waves without creating a duplicate
 - FR-9: `gt convoy launch` must be registered as a subcommand of `gt convoy` in `internal/cmd/convoy.go`
@@ -189,7 +189,7 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 ## Technical Considerations
 
 - Wave computation is informational (display only at stage time). Runtime dispatch uses the daemon's per-cycle `isIssueBlocked` checks, which is more dynamic and handles external status changes.
-- The `staged:ready` and `staged:warnings` statuses are new beads statuses that need to be recognized by the convoy system. The daemon should NOT feed issues from staged convoys (only `open` convoys get fed).
+- The `staged_ready` and `staged_warnings` statuses are new beads statuses that need to be recognized by the convoy system. The daemon should NOT feed issues from staged convoys (only `open` convoys get fed).
 - Epic DAG walking may involve cross-rig beads. Use the existing `routes.jsonl` infrastructure for rig resolution but be prepared for external references.
 - The `--json` output should be stable enough for design-to-beads to depend on, but mark it as experimental in v1.
 
@@ -198,7 +198,7 @@ go vet ./... && go build ./... && go test ./internal/cmd/... ./internal/convoy/.
 The current codebase assumes convoys are always `open` or `closed`. Adding staged statuses requires changes in multiple places:
 
 - **`ensureKnownConvoyStatus` (`convoy.go:96-108`)** — Currently only accepts `"open"` and `"closed"`. Must be extended to recognize staged statuses. Called from 14+ callsites (add, close, land, check, isSlingableBead).
-- **`validateConvoyStatusTransition` (`convoy.go:110-131`)** — Must define valid transitions: `staged:ready→open`, `staged:warnings→open` (with `--force`). Currently only knows `open↔closed`.
+- **`validateConvoyStatusTransition` (`convoy.go:110-131`)** — Must define valid transitions: `staged_ready→open`, `staged_warnings→open` (with `--force`). Currently only knows `open↔closed`.
 - **Daemon feeding has TWO paths that need guards:**
   - **Event-driven path** (`operations.go:57,70`): `isConvoyClosed` checks only `status == "closed"`. A staged convoy passes this check (not closed) and would be fed. This path needs an explicit `isStagedConvoy(status)` guard in `CheckConvoysForIssue`.
   - **Stranded scan path** (`convoy.go:1231`): uses `bd list --status=open` which excludes non-open statuses. This path is safe by accident — staged convoys won't appear in the query results.
@@ -230,7 +230,7 @@ The current codebase assumes convoys are always `open` or `closed`. Adding stage
 
 ## Open Questions
 
-1. **OPEN:** Should `staged:ready` and `staged:warnings` be proper beads statuses (requiring SDK changes), or simulated via labels/description fields? The beads SDK's `bd doctor` regex (`^[a-z][a-z0-9_]*$`) rejects colons, so `staged:ready` triggers warnings. Options under consideration: colons (canonical but triggers doctor warnings), underscores (`staged_ready`), or hyphens (`staged-ready`). This is architecturally blocking — the daemon guard (I-7), FR-6, and most integration tests depend on the answer.
+1. **OPEN:** Should `staged_ready` and `staged_warnings` be proper beads statuses (requiring SDK changes), or simulated via labels/description fields? The beads SDK's `bd doctor` regex (`^[a-z][a-z0-9_]*$`) rejects colons, so `staged_ready` triggers warnings. Options under consideration: colons (canonical but triggers doctor warnings), underscores (`staged_ready`), or hyphens (`staged-ready`). This is architecturally blocking — the daemon guard (I-7), FR-6, and most integration tests depend on the answer.
 
 2. **RESOLVED: Informational only.** Wave computation does not consider rig capacity when splitting waves. Capacity is surfaced as an informational warning (US-003 AC-5) but does not affect wave assignment. Capacity plumbing (`isRigAtCapacity`) is deferred (see Non-Goals).
 
