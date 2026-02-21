@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -488,14 +489,12 @@ func runConvoyCreate(cmd *cobra.Command, args []string) error {
 		createArgs = append(createArgs, "--force")
 	}
 
-	createCmd := exec.Command("bd", createArgs...)
-	createCmd.Dir = townBeads
-	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	createCmd.Stdout = &stdout
-	createCmd.Stderr = &stderr
-
-	if err := createCmd.Run(); err != nil {
+	if err := BdCmd(createArgs...).
+		WithAutoCommit().
+		Dir(townBeads).
+		Stderr(&stderr).
+		Run(); err != nil {
 		return fmt.Errorf("creating convoy: %w (%s)", err, strings.TrimSpace(stderr.String()))
 	}
 
@@ -505,13 +504,12 @@ func runConvoyCreate(cmd *cobra.Command, args []string) error {
 	trackedCount := 0
 	for _, issueID := range trackedIssues {
 		// Use --type=tracks for non-blocking tracking relation
-		depArgs := []string{"dep", "add", convoyID, issueID, "--type=tracks"}
-		depCmd := exec.Command("bd", depArgs...)
-		depCmd.Dir = townBeads
 		var depStderr bytes.Buffer
-		depCmd.Stderr = &depStderr
-
-		if err := depCmd.Run(); err != nil {
+		if err := BdCmd("dep", "add", convoyID, issueID, "--type=tracks").
+			WithAutoCommit().
+			Dir(townBeads).
+			Stderr(&depStderr).
+			Run(); err != nil {
 			errMsg := strings.TrimSpace(depStderr.String())
 			if errMsg == "" {
 				errMsg = err.Error()
@@ -564,13 +562,11 @@ func runConvoyAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate convoy exists and get its status
-	showArgs := []string{"show", convoyID, "--json"}
-	showCmd := exec.Command("bd", showArgs...)
-	showCmd.Dir = townBeads
-	var stdout bytes.Buffer
-	showCmd.Stdout = &stdout
-
-	if err := showCmd.Run(); err != nil {
+	showOut, err := BdCmd("show", convoyID, "--json").
+		Dir(townBeads).
+		Stderr(io.Discard).
+		Output()
+	if err != nil {
 		return fmt.Errorf("convoy '%s' not found", convoyID)
 	}
 
@@ -580,7 +576,7 @@ func runConvoyAdd(cmd *cobra.Command, args []string) error {
 		Status string `json:"status"`
 		Type   string `json:"issue_type"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &convoys); err != nil {
+	if err := json.Unmarshal(showOut, &convoys); err != nil {
 		return fmt.Errorf("parsing convoy data: %w", err)
 	}
 
@@ -603,10 +599,10 @@ func runConvoyAdd(cmd *cobra.Command, args []string) error {
 	if normalizeConvoyStatus(convoy.Status) == convoyStatusClosed {
 		// closed→open is always valid; ensureKnownConvoyStatus above guarantees
 		// the current status is known, so no additional transition check needed.
-		reopenArgs := []string{"update", convoyID, "--status=open"}
-		reopenCmd := exec.Command("bd", reopenArgs...)
-		reopenCmd.Dir = townBeads
-		if err := reopenCmd.Run(); err != nil {
+		if err := BdCmd("update", convoyID, "--status=open").
+			Dir(townBeads).
+			WithAutoCommit().
+			Run(); err != nil {
 			return fmt.Errorf("couldn't reopen convoy: %w", err)
 		}
 		reopened = true
@@ -616,13 +612,12 @@ func runConvoyAdd(cmd *cobra.Command, args []string) error {
 	// Add 'tracks' relations for each issue
 	addedCount := 0
 	for _, issueID := range issuesToAdd {
-		depArgs := []string{"dep", "add", convoyID, issueID, "--type=tracks"}
-		depCmd := exec.Command("bd", depArgs...)
-		depCmd.Dir = townBeads
 		var depStderr bytes.Buffer
-		depCmd.Stderr = &depStderr
-
-		if err := depCmd.Run(); err != nil {
+		if err := BdCmd("dep", "add", convoyID, issueID, "--type=tracks").
+			Dir(townBeads).
+			WithAutoCommit().
+			Stderr(&depStderr).
+			Run(); err != nil {
 			errMsg := strings.TrimSpace(depStderr.String())
 			if errMsg == "" {
 				errMsg = err.Error()

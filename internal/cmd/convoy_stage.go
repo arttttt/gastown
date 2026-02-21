@@ -398,21 +398,21 @@ func createStagedConvoy(dag *ConvoyDAG, waves []Wave, status string) (string, er
 		taskCount, len(waves), time.Now().UTC().Format(time.RFC3339))
 
 	// Create the convoy via bd create.
-	createCmd := exec.Command("bd", "create",
+	if out, err := BdCmd("create",
 		"--type=convoy",
 		"--id="+convoyID,
 		"--title="+title,
 		"--description="+description,
 		"--status="+status,
-	)
-	if out, err := createCmd.CombinedOutput(); err != nil {
+	).WithAutoCommit().CombinedOutput(); err != nil {
 		return "", fmt.Errorf("bd create convoy: %w\noutput: %s", err, out)
 	}
 
 	// Track each slingable bead via bd dep add.
 	for _, beadID := range slingableIDs {
-		depCmd := exec.Command("bd", "dep", "add", convoyID, beadID, "--type=tracks")
-		if out, err := depCmd.CombinedOutput(); err != nil {
+		if out, err := BdCmd("dep", "add", convoyID, beadID, "--type=tracks").
+			WithAutoCommit().
+			CombinedOutput(); err != nil {
 			return "", fmt.Errorf("bd dep add %s %s: %w\noutput: %s", convoyID, beadID, err, out)
 		}
 	}
@@ -433,16 +433,18 @@ func updateStagedConvoy(existingConvoyID string, dag *ConvoyDAG, waves []Wave, s
 	}
 
 	// Update status.
-	statusCmd := exec.Command("bd", "update", existingConvoyID, "--status="+status)
-	if out, err := statusCmd.CombinedOutput(); err != nil {
+	if out, err := BdCmd("update", existingConvoyID, "--status="+status).
+		WithAutoCommit().
+		CombinedOutput(); err != nil {
 		return fmt.Errorf("bd update %s --status: %w\noutput: %s", existingConvoyID, err, out)
 	}
 
 	// Update description with new wave count + timestamp.
 	description := fmt.Sprintf("Staged convoy: %d tasks, %d waves. Re-staged at %s",
 		taskCount, len(waves), time.Now().UTC().Format(time.RFC3339))
-	descCmd := exec.Command("bd", "update", existingConvoyID, "--description="+description)
-	if out, err := descCmd.CombinedOutput(); err != nil {
+	if out, err := BdCmd("update", existingConvoyID, "--description="+description).
+		WithAutoCommit().
+		CombinedOutput(); err != nil {
 		return fmt.Errorf("bd update %s --description: %w\noutput: %s", existingConvoyID, err, out)
 	}
 
