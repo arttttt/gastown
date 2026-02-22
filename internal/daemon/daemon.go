@@ -456,6 +456,13 @@ func (d *Daemon) heartbeat(state *State) {
 	// 6. Ensure Mayor is running (restart if dead)
 	d.ensureMayorRunning()
 
+	// 6.5. Handle Dog lifecycle: cleanup stuck dogs and dispatch plugins
+	if IsPatrolEnabled(d.patrolConfig, "handler") {
+		d.handleDogs()
+	} else {
+		d.logger.Printf("Handler patrol disabled in config, skipping")
+	}
+
 	// 7. Process lifecycle requests
 	d.processLifecycleRequests()
 

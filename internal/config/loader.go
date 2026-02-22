@@ -1343,6 +1343,11 @@ func hasExplicitNonClaudeOverride(role string, townSettings *TownSettings, rigSe
 }
 
 func resolveRoleAgentConfigCore(role, townRoot, rigPath string) *RuntimeConfig {
+	// Dogs always use Haiku — they're lightweight watchdog/utility agents.
+	if role == "dog" {
+		return claudeHaikuPreset()
+	}
+
 	// Load rig settings (may be nil for town-level roles like mayor/deacon)
 	var rigSettings *RigSettings
 	if rigPath != "" {
