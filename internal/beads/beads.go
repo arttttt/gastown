@@ -373,6 +373,21 @@ func (b *Beads) wrapError(err error, stderr string, args []string) error {
 	return fmt.Errorf("bd %s: %w", strings.Join(args, " "), err)
 }
 
+// isSubprocessCrash returns true if the error indicates the subprocess crashed
+// (e.g., Dolt nil pointer dereference causing SIGSEGV). This is used to detect
+// recoverable failures where a fallback strategy should be attempted (GH#1769).
+func isSubprocessCrash(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// Detect signals from crashed subprocesses (bd panic → SIGSEGV)
+	return strings.Contains(errStr, "signal:") ||
+		strings.Contains(errStr, "segmentation") ||
+		strings.Contains(errStr, "nil pointer") ||
+		strings.Contains(errStr, "panic:")
+}
+
 // buildRunEnv builds the environment for run() calls.
 // In isolated mode: strips all beads-related env vars for test isolation.
 // Otherwise: strips inherited BEADS_DIR so the caller can append the correct value.

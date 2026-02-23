@@ -228,6 +228,9 @@ func (c *AgentBeadsCheck) Fix(ctx *CheckContext) error {
 	}
 
 	// fixAgentBead creates the bead if missing (not in issues or wisps).
+	// Uses CreateAgentBead which tries --ephemeral first and falls back to
+	// non-ephemeral if the subprocess crashes (GH#1769: Dolt nil pointer
+	// dereference when wisps table doesn't exist on fresh rigs).
 	fixAgentBead := func(bd *beads.Beads, id, desc string, fields *beads.AgentFields) error {
 		if issue, exists := allAgentBeads[id]; exists {
 			// In issues table — ensure it has the gt:agent label
@@ -242,7 +245,7 @@ func (c *AgentBeadsCheck) Fix(ctx *CheckContext) error {
 			// Already exists as ephemeral wisp — nothing to do
 			return nil
 		}
-		// Bead missing — create it (CreateAgentBead adds gt:agent label)
+		// Bead missing — create it (CreateAgentBead handles ephemeral fallback)
 		if _, err := bd.CreateAgentBead(id, desc, fields); err != nil {
 			return fmt.Errorf("creating %s: %w", id, err)
 		}

@@ -2,6 +2,7 @@ package beads
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -2770,6 +2771,29 @@ func TestBuildRoutingEnv(t *testing.T) {
 						t.Errorf("expected %s to be absent, got %s", prefix, e)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestIsSubprocessCrash(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil error", nil, false},
+		{"normal error", fmt.Errorf("bd create: exit status 1"), false},
+		{"not found", fmt.Errorf("bd show: not found"), false},
+		{"signal segfault", fmt.Errorf("bd create: signal: segmentation fault"), true},
+		{"signal killed", fmt.Errorf("bd create: signal: killed"), true},
+		{"nil pointer in stderr", fmt.Errorf("bd create: nil pointer dereference"), true},
+		{"panic in stderr", fmt.Errorf("bd create: panic: runtime error"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isSubprocessCrash(tt.err); got != tt.want {
+				t.Errorf("isSubprocessCrash(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
 	}
