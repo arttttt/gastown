@@ -20,7 +20,7 @@ type HookEntry struct {
 
 // Hook represents an individual hook command.
 type Hook struct {
-	Type    string `json:"type"`    // "command"
+	Type    string `json:"type"` // "command"
 	Command string `json:"command"`
 }
 
@@ -236,6 +236,11 @@ func DefaultOverrides() map[string]*HooksConfig {
 // the base config and applying all applicable overrides in order of specificity.
 // If no base config exists, uses DefaultBase().
 //
+// When an on-disk base exists, DefaultBase() is merged underneath it so that
+// new hook types (e.g., SessionStart added after the base was created) are
+// automatically backfilled. User customizations in the on-disk base take
+// precedence. Hook types absent from the on-disk base inherit from DefaultBase.
+//
 // For each override key, built-in defaults (from DefaultOverrides)
 // are merged first, then on-disk overrides layer on top. On-disk overrides can
 // replace or extend base hooks by providing matching PreToolUse entries.
@@ -247,6 +252,11 @@ func ComputeExpected(target string) (*HooksConfig, error) {
 		} else {
 			return nil, fmt.Errorf("loading base config: %w", err)
 		}
+	} else {
+		// Backfill: merge DefaultBase as floor, then on-disk base on top.
+		// This ensures new hook types added to DefaultBase are always present,
+		// while preserving user customizations from the on-disk base.
+		base = Merge(DefaultBase(), base)
 	}
 
 	defaults := DefaultOverrides()

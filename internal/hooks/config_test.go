@@ -444,8 +444,75 @@ func TestComputeExpected(t *testing.T) {
 	if len(expected.SessionStart) != 1 || expected.SessionStart[0].Hooks[0].Command != "gastown-crew-session" {
 		t.Errorf("expected gastown/crew SessionStart, got %v", expected.SessionStart)
 	}
-	if len(expected.PreToolUse) != 1 || expected.PreToolUse[0].Hooks[0].Command != "crew-guard" {
-		t.Errorf("expected crew PreToolUse, got %v", expected.PreToolUse)
+	// On-disk base has no PreToolUse, so DefaultBase's 3 pr-workflow guards are
+	// backfilled. The crew override adds Bash(git*), making 4 total.
+	defaultPTU := len(DefaultBase().PreToolUse)
+	if len(expected.PreToolUse) != defaultPTU+1 {
+		t.Errorf("expected %d PreToolUse (default %d + crew 1), got %d", defaultPTU+1, defaultPTU, len(expected.PreToolUse))
+	}
+	// Verify crew-guard is present
+	hasCrewGuard := false
+	for _, e := range expected.PreToolUse {
+		if e.Matcher == "Bash(git*)" && e.Hooks[0].Command == "crew-guard" {
+			hasCrewGuard = true
+		}
+	}
+	if !hasCrewGuard {
+		t.Error("expected crew PreToolUse guard to be present")
+	}
+}
+
+// TestComputeExpectedBackfillsSessionStart reproduces gt-y22: on-disk base
+// created before SessionStart was added to DefaultBase. SessionStart should
+// be backfilled from DefaultBase so settings.json files contain PATH exports.
+func TestComputeExpectedBackfillsSessionStart(t *testing.T) {
+	tmpDir := t.TempDir()
+	setTestHome(t, tmpDir)
+
+	// Simulate a stale hooks-base.json that was created before SessionStart existed.
+	// It has Stop, PreCompact, UserPromptSubmit but no SessionStart.
+	staleBase := &HooksConfig{
+		Stop: []HookEntry{
+			{Matcher: "", Hooks: []Hook{{Type: "command", Command: "gt costs record"}}},
+		},
+		PreCompact: []HookEntry{
+			{Matcher: "", Hooks: []Hook{{Type: "command", Command: "gt prime --hook"}}},
+		},
+		UserPromptSubmit: []HookEntry{
+			{Matcher: "", Hooks: []Hook{{Type: "command", Command: "gt mail check --inject"}}},
+		},
+	}
+	if err := SaveBase(staleBase); err != nil {
+		t.Fatalf("SaveBase failed: %v", err)
+	}
+
+	// All targets should get SessionStart backfilled from DefaultBase
+	for _, target := range []string{"mayor", "crew", "witness", "gastown/crew"} {
+		expected, err := ComputeExpected(target)
+		if err != nil {
+			t.Fatalf("ComputeExpected(%s) failed: %v", target, err)
+		}
+		if len(expected.SessionStart) == 0 {
+			t.Errorf("%s: expected SessionStart to be backfilled from DefaultBase, got none", target)
+		}
+		// Verify PATH= is present (the actual doctor check)
+		hasPath := false
+		for _, entry := range expected.SessionStart {
+			for _, hook := range entry.Hooks {
+				if strings.Contains(hook.Command, "PATH=") {
+					hasPath = true
+				}
+			}
+		}
+		if !hasPath {
+			t.Errorf("%s: expected PATH= in SessionStart hooks", target)
+		}
+		// On-disk Stop should be preserved (not overwritten by DefaultBase)
+		if len(expected.Stop) == 0 {
+			t.Errorf("%s: on-disk Stop should be preserved", target)
+		} else if expected.Stop[0].Hooks[0].Command != "gt costs record" {
+			t.Errorf("%s: on-disk Stop should take precedence, got %q", target, expected.Stop[0].Hooks[0].Command)
+		}
 	}
 }
 
@@ -525,7 +592,7 @@ func TestComputeExpectedNoBase(t *testing.T) {
 	}
 	// Verify patrol matchers are present
 	patrolMatchers := map[string]bool{
-		"Bash(*bd mol pour*patrol*)":       false,
+		"Bash(*bd mol pour*patrol*)":        false,
 		"Bash(*bd mol pour *mol-witness*)":  false,
 		"Bash(*bd mol pour *mol-deacon*)":   false,
 		"Bash(*bd mol pour *mol-refinery*)": false,
@@ -603,7 +670,6 @@ func TestComputeExpectedBuiltinPlusOnDisk(t *testing.T) {
 		t.Errorf("expected custom-mayor-session, got %q", expected.SessionStart[0].Hooks[0].Command)
 	}
 }
-
 
 func TestHooksEqual(t *testing.T) {
 	a := &HooksConfig{
