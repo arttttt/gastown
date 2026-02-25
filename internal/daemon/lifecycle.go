@@ -437,7 +437,7 @@ func (d *Daemon) getNeedsPreSync(config *beads.RoleConfig, parsed *ParsedIdentit
 
 	// Fallback: roles with persistent git clones need pre-sync
 	switch parsed.RoleType {
-	case "refinery", "crew", "polecat":
+	case "refinery", "crew":
 		return true
 	default:
 		return false
