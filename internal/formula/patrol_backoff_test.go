@@ -1,7 +1,6 @@
 package formula
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -87,13 +86,12 @@ func TestPatrolFormulasHaveSquashCycle(t *testing.T) {
 	type patrolFormula struct {
 		name       string
 		loopStepID string
-		molName    string // the formula name used in "bd mol wisp <name>"
 	}
 
 	patrolFormulas := []patrolFormula{
-		{"mol-witness-patrol.formula.toml", "loop-or-exit", "mol-witness-patrol"},
-		{"mol-deacon-patrol.formula.toml", "loop-or-exit", "mol-deacon-patrol"},
-		{"mol-refinery-patrol.formula.toml", "burn-or-loop", "mol-refinery-patrol"},
+		{"mol-witness-patrol.formula.toml", "loop-or-exit"},
+		{"mol-deacon-patrol.formula.toml", "loop-or-exit"},
+		{"mol-refinery-patrol.formula.toml", "burn-or-loop"},
 	}
 
 	for _, pf := range patrolFormulas {
@@ -120,18 +118,16 @@ func TestPatrolFormulasHaveSquashCycle(t *testing.T) {
 				t.Fatalf("%s: %s step not found or has empty description", pf.name, pf.loopStepID)
 			}
 
-			// The loop step must contain all three parts of the cycle:
+			// The loop step must contain all parts of the cycle:
 			// 1. Squash the current wisp (using gt mol squash --jitter to reduce lock contention)
-			// 2. Create a new patrol wisp
-			// 3. Hook/assign the new wisp
+			// 2. Create and hook a new patrol wisp via gt patrol new
 			requiredPatterns := []struct {
 				pattern string
 				reason  string
 			}{
 				{"gt mol squash", "squash current wisp using gt command (not bd) for jitter support"},
 				{"--jitter", "jitter flag required to desynchronize concurrent Dolt lock acquisitions (hq-vytww2)"},
-				{fmt.Sprintf("bd mol wisp %s", pf.molName), "create new patrol wisp for next cycle"},
-				{"--status=hooked", "hook the new wisp so findActivePatrol can find it"},
+				{"gt patrol new", "create and hook new patrol wisp for next cycle"},
 			}
 
 			for _, rp := range requiredPatterns {
