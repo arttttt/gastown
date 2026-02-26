@@ -834,7 +834,7 @@ func TestDiscoverTargets_RoleNames(t *testing.T) {
 	os.MkdirAll(filepath.Join(tmpDir, "rig1", "crew", "alice"), 0755)
 	os.MkdirAll(filepath.Join(tmpDir, "rig1", "polecats", "toast"), 0755)
 	os.MkdirAll(filepath.Join(tmpDir, "rig1", "witness"), 0755)
-	os.MkdirAll(filepath.Join(tmpDir, "rig1", "refinery", "rig"), 0755)
+	os.MkdirAll(filepath.Join(tmpDir, "rig1", "refinery"), 0755)
 
 	targets, err := DiscoverTargets(tmpDir)
 	if err != nil {

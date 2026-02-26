@@ -423,11 +423,11 @@ func DiscoverTargets(townRoot string) ([]Target, error) {
 			})
 		}
 
-		// Refinery — settings in the refinery working directory (refinery/rig/)
-		refineryRigDir := filepath.Join(rigPath, "refinery", "rig")
-		if info, err := os.Stat(refineryRigDir); err == nil && info.IsDir() {
+		// Refinery — settings in the refinery parent directory
+		refineryDir := filepath.Join(rigPath, "refinery")
+		if info, err := os.Stat(refineryDir); err == nil && info.IsDir() {
 			targets = append(targets, Target{
-				Path: filepath.Join(refineryRigDir, ".claude", "settings.json"),
+				Path: filepath.Join(refineryDir, ".claude", "settings.json"),
 				Key:  rigName + "/refinery",
 				Rig:  rigName,
 				Role: "refinery",

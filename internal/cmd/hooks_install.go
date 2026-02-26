@@ -182,9 +182,9 @@ func determineTargets(townRoot, role string, allRigs bool, allowedRoles []string
 				targets = append(targets, witnessDir)
 			}
 		case "refinery":
-			refineryRigDir := filepath.Join(rigPath, "refinery", "rig")
-			if info, err := os.Stat(refineryRigDir); err == nil && info.IsDir() {
-				targets = append(targets, refineryRigDir)
+			refineryDir := filepath.Join(rigPath, "refinery")
+			if info, err := os.Stat(refineryDir); err == nil && info.IsDir() {
+				targets = append(targets, refineryDir)
 			}
 		}
 	}
@@ -208,10 +208,8 @@ func resolveSettingsTarget(townRoot, cwd string) string {
 	// parts[0] = rig name (or mayor/deacon), parts[1] = role dir
 	roleDir := parts[1]
 	switch roleDir {
-	case "crew", "polecats", "witness":
+	case "crew", "polecats", "witness", "refinery":
 		return filepath.Join(townRoot, parts[0], roleDir)
-	case "refinery":
-		return filepath.Join(townRoot, parts[0], "refinery", "rig")
 	default:
 		return cwd
 	}
