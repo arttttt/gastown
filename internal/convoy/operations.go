@@ -175,11 +175,17 @@ var blockingDepTypes = map[string]bool{
 	"blocks":             true,
 	"conditional-blocks": true,
 	"waits-for":          true,
+	"merge-blocks":       true,
 }
 
 // isIssueBlocked checks if an issue has unclosed blocking dependencies.
-// Returns true if any blocks, conditional-blocks, or waits-for dependency
-// targets an issue that is not closed/tombstone.
+// Returns true if any blocks, conditional-blocks, waits-for, or merge-blocks
+// dependency targets an issue that is not closed/tombstone.
+//
+// For merge-blocks dependencies, "closed" alone is not sufficient — the
+// blocker must have a CloseReason starting with "Merged in " to confirm
+// that the code was actually integrated. This prevents dispatching work
+// against un-merged code (see #1893).
 //
 // Note: this uses the hq store's dependency metadata snapshot. For cross-rig
 // issues, the blocking issue's status may be stale (see Discovery #11 in
@@ -199,8 +205,15 @@ func isIssueBlocked(ctx context.Context, store beadsdk.Storage, issueID string) 
 			continue
 		}
 		status := string(d.Status)
-		if status != "closed" && status != "tombstone" {
-			return true
+		if status == "tombstone" {
+			continue // always unblocked
+		}
+		if status != "closed" {
+			return true // not closed = blocked
+		}
+		// For merge-blocks: "closed" alone is not enough — need merge confirmation
+		if depType == "merge-blocks" && !strings.HasPrefix(d.CloseReason, "Merged in ") {
+			return true // closed but not merged = still blocked
 		}
 	}
 	return false

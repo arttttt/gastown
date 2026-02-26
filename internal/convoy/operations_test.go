@@ -171,7 +171,7 @@ func TestCheckConvoysForIssue_NilLogger(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBlockingDepTypes_ContainsExpectedTypes(t *testing.T) {
-	expected := []string{"blocks", "conditional-blocks", "waits-for"}
+	expected := []string{"blocks", "conditional-blocks", "waits-for", "merge-blocks"}
 	for _, depType := range expected {
 		if !blockingDepTypes[depType] {
 			t.Errorf("blockingDepTypes should contain %q", depType)
@@ -186,9 +186,9 @@ func TestBlockingDepTypes_ExcludesParentChild(t *testing.T) {
 }
 
 func TestBlockingDepTypes_ExactSize(t *testing.T) {
-	// Ensure the map has exactly the 3 expected entries and no extras.
-	if len(blockingDepTypes) != 3 {
-		t.Errorf("blockingDepTypes has %d entries, want 3; contents: %v", len(blockingDepTypes), blockingDepTypes)
+	// Ensure the map has exactly the 4 expected entries and no extras.
+	if len(blockingDepTypes) != 4 {
+		t.Errorf("blockingDepTypes has %d entries, want 4; contents: %v", len(blockingDepTypes), blockingDepTypes)
 	}
 }
 
@@ -399,6 +399,186 @@ func TestIsIssueBlocked_FailOpenOnNonexistentIssue(t *testing.T) {
 	// Querying deps for a nonexistent issue should fail-open (return false)
 	if isIssueBlocked(ctx, store, "test-nonexistent-issue") {
 		t.Error("isIssueBlocked should fail-open (return false) for nonexistent issue")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// merge-blocks dependency tests (#1893)
+// ---------------------------------------------------------------------------
+
+func TestIsIssueBlocked_MergeBlocksStillBlockedWhenClosedWithoutMerge(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// Blocker is closed but has no CloseReason (gt done without merge)
+	blocker := &beadsdk.Issue{
+		ID:        "test-mblkr1",
+		Title:     "Closed No Merge",
+		Status:    beadsdk.StatusClosed,
+		Priority:  2,
+		IssueType: beadsdk.TypeTask,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	blocked := &beadsdk.Issue{
+		ID:        "test-mblkd1",
+		Title:     "Merge-Blocked",
+		Status:    beadsdk.StatusOpen,
+		Priority:  2,
+		IssueType: beadsdk.TypeTask,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := store.CreateIssue(ctx, blocker, "test"); err != nil {
+		t.Fatalf("CreateIssue blocker: %v", err)
+	}
+	if err := store.CreateIssue(ctx, blocked, "test"); err != nil {
+		t.Fatalf("CreateIssue blocked: %v", err)
+	}
+
+	dep := &beadsdk.Dependency{
+		IssueID:     blocked.ID,
+		DependsOnID: blocker.ID,
+		Type:        beadsdk.DependencyType("merge-blocks"),
+		CreatedAt:   now,
+		CreatedBy:   "test",
+	}
+	if err := store.AddDependency(ctx, dep, "test"); err != nil {
+		t.Fatalf("AddDependency: %v", err)
+	}
+
+	result := isIssueBlocked(ctx, store, blocked.ID)
+
+	// Check if GetDependenciesWithMetadata works in embedded mode
+	if !result {
+		_, metaErr := store.GetDependenciesWithMetadata(ctx, blocked.ID)
+		if metaErr != nil {
+			t.Skipf("GetDependenciesWithMetadata not supported in embedded mode: %v", metaErr)
+		}
+		t.Error("isIssueBlocked should return true for merge-blocks dep when blocker is closed without merge")
+	}
+}
+
+func TestIsIssueBlocked_MergeBlocksUnblockedWhenMerged(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// Blocker is closed WITH merge confirmation
+	blocker := &beadsdk.Issue{
+		ID:          "test-mblkr2",
+		Title:       "Merged Blocker",
+		Status:      beadsdk.StatusClosed,
+		CloseReason: "Merged in mr-xyz",
+		Priority:    2,
+		IssueType:   beadsdk.TypeTask,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	blocked := &beadsdk.Issue{
+		ID:        "test-mblkd2",
+		Title:     "Merge-Blocked By Merged",
+		Status:    beadsdk.StatusOpen,
+		Priority:  2,
+		IssueType: beadsdk.TypeTask,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := store.CreateIssue(ctx, blocker, "test"); err != nil {
+		t.Fatalf("CreateIssue blocker: %v", err)
+	}
+	if err := store.CreateIssue(ctx, blocked, "test"); err != nil {
+		t.Fatalf("CreateIssue blocked: %v", err)
+	}
+
+	dep := &beadsdk.Dependency{
+		IssueID:     blocked.ID,
+		DependsOnID: blocker.ID,
+		Type:        beadsdk.DependencyType("merge-blocks"),
+		CreatedAt:   now,
+		CreatedBy:   "test",
+	}
+	if err := store.AddDependency(ctx, dep, "test"); err != nil {
+		t.Fatalf("AddDependency: %v", err)
+	}
+
+	// Blocker is closed with "Merged in mr-xyz" — should NOT be blocked
+	if isIssueBlocked(ctx, store, blocked.ID) {
+		// Check if it's the embedded Dolt issue
+		_, metaErr := store.GetDependenciesWithMetadata(ctx, blocked.ID)
+		if metaErr != nil {
+			t.Skipf("GetDependenciesWithMetadata not supported in embedded mode: %v", metaErr)
+		}
+		t.Error("isIssueBlocked should return false when merge-blocks blocker has CloseReason 'Merged in ...'")
+	}
+}
+
+func TestIsIssueBlocked_MergeBlocksUnblockedOnTombstone(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// Create blocker as open first, then transition to tombstone
+	blocker := &beadsdk.Issue{
+		ID:        "test-mblkr3",
+		Title:     "Tombstone Blocker",
+		Status:    beadsdk.StatusOpen,
+		Priority:  2,
+		IssueType: beadsdk.TypeTask,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	blocked := &beadsdk.Issue{
+		ID:        "test-mblkd3",
+		Title:     "Merge-Blocked By Tombstone",
+		Status:    beadsdk.StatusOpen,
+		Priority:  2,
+		IssueType: beadsdk.TypeTask,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := store.CreateIssue(ctx, blocker, "test"); err != nil {
+		t.Fatalf("CreateIssue blocker: %v", err)
+	}
+	if err := store.CreateIssue(ctx, blocked, "test"); err != nil {
+		t.Fatalf("CreateIssue blocked: %v", err)
+	}
+
+	dep := &beadsdk.Dependency{
+		IssueID:     blocked.ID,
+		DependsOnID: blocker.ID,
+		Type:        beadsdk.DependencyType("merge-blocks"),
+		CreatedAt:   now,
+		CreatedBy:   "test",
+	}
+	if err := store.AddDependency(ctx, dep, "test"); err != nil {
+		t.Fatalf("AddDependency: %v", err)
+	}
+
+	// Transition to tombstone
+	if err := store.UpdateIssue(ctx, blocker.ID, map[string]interface{}{
+		"status": "tombstone",
+	}, "test"); err != nil {
+		t.Fatalf("UpdateIssue to tombstone: %v", err)
+	}
+
+	// Tombstone always unblocks, regardless of dep type
+	if isIssueBlocked(ctx, store, blocked.ID) {
+		_, metaErr := store.GetDependenciesWithMetadata(ctx, blocked.ID)
+		if metaErr != nil {
+			t.Skipf("GetDependenciesWithMetadata not supported in embedded mode: %v", metaErr)
+		}
+		t.Error("isIssueBlocked should return false when merge-blocks blocker is tombstoned")
 	}
 }
 
