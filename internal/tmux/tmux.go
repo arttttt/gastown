@@ -68,6 +68,13 @@ func SetDefaultSocket(name string) { defaultSocket = name }
 // GetDefaultSocket returns the current default tmux socket name.
 func GetDefaultSocket() string { return defaultSocket }
 
+// SocketDir returns the directory where tmux stores its socket files.
+// On macOS, tmux uses /tmp (not $TMPDIR which points to /var/folders/...),
+// so we must use /tmp directly rather than os.TempDir().
+func SocketDir() string {
+	return filepath.Join("/tmp", fmt.Sprintf("tmux-%d", os.Getuid()))
+}
+
 // IsInSameSocket checks if the current process is inside a tmux session on the
 // same socket as the default town socket. Used to decide between switch-client
 // (same socket) and attach-session (different socket or outside tmux).

@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 
 	if tmuxSocket != "" {
 		_ = exec.Command("tmux", "-L", tmuxSocket, "kill-server").Run()
-		socketPath := filepath.Join(fmt.Sprintf("/tmp/tmux-%d", os.Getuid()), tmuxSocket)
+		socketPath := filepath.Join(tmux.SocketDir(), tmuxSocket)
 		_ = os.Remove(socketPath)
 	}
 	testutil.CleanupDoltServer()

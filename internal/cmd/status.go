@@ -811,8 +811,7 @@ func gatherStatus() (TownStatus, error) {
 		Running:      len(allSessions) > 0,
 	}
 	// Resolve socket path: /tmp/tmux-<UID>/<socket>
-	// tmux always uses /tmp, not os.TempDir() (which differs on macOS).
-	tmuxInfo.SocketPath = fmt.Sprintf("/tmp/tmux-%d/%s", os.Getuid(), socketLabel)
+	tmuxInfo.SocketPath = filepath.Join(tmux.SocketDir(), socketLabel)
 	if _, err := os.Stat(tmuxInfo.SocketPath); err == nil {
 		tmuxInfo.Running = true
 	}
