@@ -1083,16 +1083,13 @@ The idle counter was auto-incremented. Continue to next patrol cycle
 (the longer backoff will apply next time).
 
 After await-signal returns (either by signal or timeout):
-1. Generate a brief summary of this patrol cycle
-2. Squash the current wisp:
+1. Generate a brief summary of this patrol cycle's observations
+2. Close current patrol and start next cycle:
 ```bash
-gt mol squash --jitter 10s --summary "<patrol-summary>"
+gt patrol report --summary "<brief summary of patrol observations>"
 ```
-3. Create a new patrol wisp:
-```bash
-gt patrol new
-```
-4. Continue executing from the inbox-check step of the new wisp
+This closes the current patrol wisp and automatically creates a new one.
+3. Continue executing from the first step of the new patrol cycle
 
 **If context HIGH** (approaching limit):
 1. Write handoff mail with notable observations:
@@ -1101,5 +1098,5 @@ gt handoff -s "Deacon patrol handoff" -m "<observations>"
 ```
 2. Exit cleanly - the daemon will respawn a fresh Deacon session
 
-**IMPORTANT**: You must either create a new wisp (context LOW) or exit (context HIGH).
+**IMPORTANT**: You must either report and loop (context LOW) or exit (context HIGH).
 Never leave the session idle without work on your hook."""

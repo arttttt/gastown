@@ -744,19 +744,16 @@ The idle counter was auto-incremented. Continue to next patrol cycle
 
 After await-event returns (either by event or timeout):
 1. **Re-assess session health** (check RSS, context, age again — conditions change)
-2. Squash the current wisp:
+2. Close current patrol and start next cycle:
 ```bash
-gt mol squash --jitter 10s --summary "<patrol-summary>"
+gt patrol report --summary "<brief summary: branches merged, test results, queue state>"
 ```
-3. Create a new patrol wisp:
-```bash
-gt patrol new
-```
-4. Continue executing from the inbox-check step of the new wisp
+This closes the current patrol wisp and automatically creates a new one.
+3. Continue executing from the first step of the new patrol cycle
 
 **If you decide to hand off:**
 
-Squash wisp with summary digest, then use `gt handoff` for clean session transition:
+Report and exit using `gt handoff` for clean session transition:
 
 ```bash
 gt handoff -s "Patrol complete" -m "Merged X branches, Y tests passed.

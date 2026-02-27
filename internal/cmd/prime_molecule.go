@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/steveyegge/gastown/internal/cli"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/cli"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/deacon"
+	"github.com/steveyegge/gastown/internal/formula"
 	"github.com/steveyegge/gastown/internal/rig"
 	"github.com/steveyegge/gastown/internal/style"
 )
@@ -103,6 +104,49 @@ func showMoleculeExecutionPrompt(workDir, moleculeID string) {
 		fmt.Println("  - Report completion to supervisor")
 		fmt.Println("  - Check for new work: bd mol current")
 	}
+}
+
+// showPatrolFormulaSteps renders the formula steps inline in the prime output.
+// Patrol agents read these steps instead of materializing them as wisp rows.
+func showPatrolFormulaSteps(formulaName string) {
+	content, err := formula.GetEmbeddedFormulaContent(formulaName)
+	if err != nil {
+		style.PrintWarning("could not load formula %s: %v", formulaName, err)
+		return
+	}
+
+	f, err := formula.Parse(content)
+	if err != nil {
+		style.PrintWarning("could not parse formula %s: %v", formulaName, err)
+		return
+	}
+
+	if len(f.Steps) == 0 {
+		return
+	}
+
+	fmt.Println()
+	fmt.Printf("**Patrol Steps** (%d steps from %s):\n", len(f.Steps), formulaName)
+	for i, step := range f.Steps {
+		fmt.Printf("  %d. **%s** — %s\n", i+1, step.Title, truncateDescription(step.Description, 120))
+	}
+	fmt.Println()
+}
+
+// truncateDescription truncates a multi-line description to a single line summary.
+func truncateDescription(desc string, maxLen int) string {
+	// Take just the first line
+	if idx := strings.IndexByte(desc, '\n'); idx >= 0 {
+		desc = desc[:idx]
+	}
+	desc = strings.TrimSpace(desc)
+	if len(desc) > maxLen {
+		desc = desc[:maxLen-3] + "..."
+	}
+	if desc == "" {
+		desc = "(no description)"
+	}
+	return desc
 }
 
 // outputMoleculeContext checks if the agent is working on a molecule step and shows progress.
@@ -255,14 +299,12 @@ func outputDeaconPatrolContext(ctx RoleContext) {
 		HeaderEmoji:     "🔄",
 		HeaderTitle:     "Patrol Status (Wisp-based)",
 		WorkLoopSteps: []string{
-			"Check next step: `bd mol current`",
-			"Execute the step (heartbeat, mail, health checks, etc.)",
-			"Close step: `bd close <step-id>`",
-			"Check next: `bd mol current`",
-			"At cycle end (loop-or-exit step):\n   - If context LOW:\n     * Squash: `" + cli.Name() + " mol squash --no-digest --jitter 10s --summary \"<summary>\"`\n     * Create new patrol: `" + cli.Name() + " patrol new`\n     * Continue executing from inbox-check step\n   - If context HIGH:\n     * Send handoff: `" + cli.Name() + " handoff -s \"Deacon patrol\" -m \"<observations>\"`\n     * Exit cleanly (daemon respawns fresh session)",
+			"Work through each patrol step in sequence (see checklist below)",
+			"At cycle end:\n   - If context LOW:\n     * Report and loop: `" + cli.Name() + " patrol report --summary \"<brief summary of observations>\"`\n     * This closes the current patrol and starts a new cycle\n   - If context HIGH:\n     * Send handoff: `" + cli.Name() + " handoff -s \"Deacon patrol\" -m \"<observations>\"`\n     * Exit cleanly (daemon respawns fresh session)",
 		},
 	}
 	outputPatrolContext(cfg)
+	showPatrolFormulaSteps("mol-deacon-patrol")
 }
 
 // outputWitnessPatrolContext shows patrol molecule status for the Witness.
@@ -276,15 +318,12 @@ func outputWitnessPatrolContext(ctx RoleContext) {
 		HeaderEmoji:     constants.EmojiWitness,
 		HeaderTitle:     "Witness Patrol Status",
 		WorkLoopSteps: []string{
-			"Check inbox: `" + cli.Name() + " mail inbox`",
-			"Check next step: `bd mol current`",
-			"Execute the step (survey polecats, inspect, nudge, etc.)",
-			"Close step: `bd close <step-id>`",
-			"Check next: `bd mol current`",
-			"At cycle end (loop-or-exit step):\n   - If context LOW:\n     * Squash: `" + cli.Name() + " mol squash --no-digest --jitter 10s --summary \"<summary>\"`\n     * Create new patrol: `" + cli.Name() + " patrol new`\n     * Continue executing from inbox-check step\n   - If context HIGH:\n     * Send handoff: `" + cli.Name() + " handoff -s \"Witness patrol\" -m \"<observations>\"`\n     * Exit cleanly (daemon respawns fresh session)",
+			"Work through each patrol step in sequence (see checklist below)",
+			"At cycle end:\n   - If context LOW:\n     * Report and loop: `" + cli.Name() + " patrol report --summary \"<brief summary of observations>\"`\n     * This closes the current patrol and starts a new cycle\n   - If context HIGH:\n     * Send handoff: `" + cli.Name() + " handoff -s \"Witness patrol\" -m \"<observations>\"`\n     * Exit cleanly (daemon respawns fresh session)",
 		},
 	}
 	outputPatrolContext(cfg)
+	showPatrolFormulaSteps("mol-witness-patrol")
 }
 
 // outputRefineryPatrolContext shows patrol molecule status for the Refinery.
@@ -299,15 +338,12 @@ func outputRefineryPatrolContext(ctx RoleContext) {
 		HeaderTitle:     "Refinery Patrol Status",
 		ExtraVars:       buildRefineryPatrolVars(ctx),
 		WorkLoopSteps: []string{
-			"Check inbox: `" + cli.Name() + " mail inbox`",
-			"Check next step: `bd mol current`",
-			"Execute the step (queue scan, process branch, tests, merge)",
-			"Close step: `bd close <step-id>`",
-			"Check next: `bd mol current`",
-			"At cycle end (loop-or-exit step):\n   - If context LOW:\n     * Squash: `" + cli.Name() + " mol squash --no-digest --jitter 10s --summary \"<summary>\"`\n     * Create new patrol: `" + cli.Name() + " patrol new`\n     * Continue executing from inbox-check step\n   - If context HIGH:\n     * Send handoff: `" + cli.Name() + " handoff -s \"Refinery patrol\" -m \"<observations>\"`\n     * Exit cleanly (daemon respawns fresh session)",
+			"Work through each patrol step in sequence (see checklist below)",
+			"At cycle end:\n   - If context LOW:\n     * Report and loop: `" + cli.Name() + " patrol report --summary \"<brief summary of observations>\"`\n     * This closes the current patrol and starts a new cycle\n   - If context HIGH:\n     * Send handoff: `" + cli.Name() + " handoff -s \"Refinery patrol\" -m \"<observations>\"`\n     * Exit cleanly (daemon respawns fresh session)",
 		},
 	}
 	outputPatrolContext(cfg)
+	showPatrolFormulaSteps("mol-refinery-patrol")
 }
 
 // buildRefineryPatrolVars loads rig MQ settings and returns --var key=value
