@@ -431,20 +431,24 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 		}
 
 		// If no commits ahead, work was likely pushed directly to main (or already merged)
-		// For polecats, zero commits usually means the polecat hallucinated completion
-		// (gastown#1484). Require --cleanup-status=clean as explicit acknowledgment
-		// that no code changes were expected (e.g., review or testing tasks).
+		// For polecats, zero commits usually means the polecat sleepwalked through
+		// implementation without writing code (gastown#1484, beads#emma).
+		// The --cleanup-status=clean escape is preserved for legitimate report-only
+		// tasks (audits, reviews) that the formula explicitly directs to use it.
+		// IMPORTANT: The error message must NOT mention --cleanup-status=clean.
+		// LLM agents read error messages and self-bypass (the original bug).
 		if aheadCount == 0 {
 			if os.Getenv("GT_POLECAT") != "" && doneCleanupStatus != "clean" {
-				return fmt.Errorf("cannot complete: no commits on branch\n" +
-					"If this task required no code changes (review, testing, triage),\n" +
-					"re-run with: gt done --cleanup-status clean\n" +
-					"Otherwise: --status ESCALATED (blocker) or --status DEFERRED (pause)")
+				return fmt.Errorf("cannot complete: no commits on branch ahead of %s\n"+
+					"Polecats must have at least 1 commit to submit.\n"+
+					"If the bug was already fixed upstream: gt done --status DEFERRED\n"+
+					"If you're blocked: gt done --status ESCALATED",
+					originDefault)
 			}
 
-			// Non-polecat (crew/mayor) or polecat with --cleanup-status=clean:
-			// zero commits is valid — work may have been pushed directly to main,
-			// already merged, or task required no code changes.
+			// Non-polecat (crew/mayor) or polecat with --cleanup-status=clean
+			// (report-only tasks like audits/reviews where no code changes expected):
+			// zero commits is valid.
 			fmt.Printf("%s Branch has no commits ahead of %s\n", style.Bold.Render("→"), originDefault)
 			fmt.Printf("  Work was likely pushed directly to main or already merged.\n")
 			fmt.Printf("  Skipping MR creation - completing without merge request.\n\n")
