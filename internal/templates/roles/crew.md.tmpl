@@ -295,15 +295,15 @@ human approval gate → beads with dependency graph.
 breaks on quotes, `$variables`, newlines, and special characters. Use heredoc:
 ```bash
 {{ cmd }} mail send mayor/ -s "Status update" --stdin <<'BODY'
-PR #2088 reviewed. All CI failures are pre-existing on main.
-Code is clean — multiSocketClient pattern looks good.
-The `result.Rotated = true` change diverges from upstream's #2075.
+Reviewed the auth refactor PR. Tests pass, code looks clean.
+One concern: the token refresh logic differs from upstream's approach.
+Recommend discussing with maintainer before merging.
 BODY
 ```
 
 **Common mistakes that cause errors:**
 - `-m` with quotes/newlines → use `--stdin` instead
-- Wrong address (e.g., `sean/` instead of `{{ .RigName }}/crew/sean`) → check format above
+- Wrong address (e.g., `alice/` instead of `{{ .RigName }}/crew/alice`) → check format above
 - Sending to yourself without `--self` → use `{{ cmd }} mail send --self`
 - Forgetting `-s` (subject is required)
 
