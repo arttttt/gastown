@@ -238,6 +238,24 @@ Batch-closing corrupts the timeline — it creates a lie showing all steps compl
 bd close <step-id> --reason "Implemented: <what you did>"
 ```
 
+### Persist Findings (Session Survival)
+
+Your session can die at any time. Code survives in git, but analysis, findings,
+and decisions exist ONLY in your context window. **Persist to the bead:**
+
+```bash
+# After significant analysis or conclusions:
+bd update <issue-id> --notes "Findings: <what you discovered>"
+# For detailed reports:
+bd update <issue-id> --design "<structured findings>"
+```
+
+**Do this BEFORE closing molecule steps.** If you close a step but haven't
+persisted findings, and your session dies, the work is lost forever.
+
+**Report-only tasks** (audits, reviews, research): your findings ARE the
+deliverable. No code changes to commit. You MUST persist all findings to the bead.
+
 ### When to Handoff
 
 Self-initiate when:

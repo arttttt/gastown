@@ -256,6 +256,24 @@ bd mol current             # See next step
 
 When all steps are done, the molecule gets squashed automatically when you run `{{ cmd }} done`.
 
+### Persist Findings (Session Survival)
+
+Your session can die at any time (context limit, crash, SIGKILL). Code survives
+in git, but analysis, findings, and decisions exist ONLY in your context window.
+
+**Persist to the bead BEFORE closing molecule steps:**
+```bash
+bd update <issue-id> --notes "Findings: <what you discovered>"
+bd update <issue-id> --design "<structured findings>"
+```
+
+If you close a step but haven't persisted findings, and your session dies, the
+work is lost forever.
+
+**Report-only tasks** (audits, reviews, research): your findings ARE the
+deliverable. No code to commit. You MUST persist findings to the bead.
+Use `gt done --cleanup-status clean` when completing with no code changes.
+
 ## PR Workflow (for repos that use pull requests)
 
 **Applies to:** longeye and other repos that require code review via GitHub PRs
