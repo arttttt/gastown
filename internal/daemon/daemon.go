@@ -430,6 +430,18 @@ func (d *Daemon) Run() error {
 		d.logger.Printf("Janitor dog ticker started (interval %v)", interval)
 	}
 
+	// Start compactor dog ticker if configured.
+	// Flattens Dolt commit history to reclaim graph storage (daily).
+	var compactorDogTicker *time.Ticker
+	var compactorDogChan <-chan time.Time
+	if IsPatrolEnabled(d.patrolConfig, "compactor_dog") {
+		interval := compactorDogInterval(d.patrolConfig)
+		compactorDogTicker = time.NewTicker(interval)
+		compactorDogChan = compactorDogTicker.C
+		defer compactorDogTicker.Stop()
+		d.logger.Printf("Compactor dog ticker started (interval %v)", interval)
+	}
+
 	// Note: PATCH-010 uses per-session hooks in deacon/manager.go (SetAutoRespawnHook).
 	// Global pane-died hooks don't fire reliably in tmux 3.2a, so we rely on the
 	// per-session approach which has been tested to work for continuous recovery.
@@ -506,6 +518,13 @@ func (d *Daemon) Run() error {
 			// Janitor dog — pours molecule for test server orphan cleanup.
 			if !d.isShutdownInProgress() {
 				d.runJanitorDog()
+			}
+
+		case <-compactorDogChan:
+			// Compactor dog — flattens Dolt commit history on production databases.
+			// Reclaims commit graph storage. Doctor Dog gc reclaims chunks after.
+			if !d.isShutdownInProgress() {
+				d.runCompactorDog()
 			}
 
 		case <-timer.C:

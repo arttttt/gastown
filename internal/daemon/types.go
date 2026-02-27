@@ -126,6 +126,7 @@ type PatrolsConfig struct {
 	WispReaper     *WispReaperConfig      `json:"wisp_reaper,omitempty"`
 	DoctorDog      *DoctorDogConfig       `json:"doctor_dog,omitempty"`
 	JanitorDog     *JanitorDogConfig      `json:"janitor_dog,omitempty"`
+	CompactorDog   *CompactorDogConfig    `json:"compactor_dog,omitempty"`
 }
 
 // DoltRemotesConfig holds configuration for the dolt_remotes patrol.
@@ -266,6 +267,12 @@ func IsPatrolEnabled(config *DaemonPatrolConfig, patrol string) bool {
 			return false
 		}
 		return config.Patrols.JanitorDog.Enabled
+	}
+	if patrol == "compactor_dog" {
+		if config == nil || config.Patrols == nil || config.Patrols.CompactorDog == nil {
+			return false
+		}
+		return config.Patrols.CompactorDog.Enabled
 	}
 
 	if config == nil || config.Patrols == nil {
