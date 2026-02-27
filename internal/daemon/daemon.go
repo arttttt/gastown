@@ -86,6 +86,11 @@ type Daemon struct {
 	// jsonlPushFailures tracks consecutive git push failures for JSONL backup.
 	// Only accessed from heartbeat loop goroutine - no sync needed.
 	jsonlPushFailures int
+
+	// lastDoctorMolTime tracks when the last mol-dog-doctor molecule was poured.
+	// Option B throttling: only pour when anomaly detected AND cooldown elapsed.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	lastDoctorMolTime time.Time
 }
 
 // sessionDeath records a detected session death for mass death analysis.
@@ -105,6 +110,12 @@ const (
 	// (process exists) but not making progress (infinite loop, stuck API
 	// call, etc.). Conservative: 30 minutes. See: gt-tr3d
 	hungSessionThreshold = 30 * time.Minute
+
+	// doctorMolCooldown is the minimum interval between mol-dog-doctor molecules.
+	// Option B throttling: health checks run every 30s, but we only pour a
+	// molecule when anomalies are detected, with this cooldown to avoid spamming.
+	// 5 minutes = max 288 wisps/day vs ~2880 without throttling.
+	doctorMolCooldown = 5 * time.Minute
 )
 
 // New creates a new daemon instance.
@@ -618,6 +629,8 @@ func (d *Daemon) heartbeat(state *State) {
 
 // ensureDoltServerRunning ensures the Dolt SQL server is running if configured.
 // This provides the backend for beads database access in server mode.
+// Option B throttling: pours a mol-dog-doctor molecule only when health check
+// warnings are detected, with a 5-minute cooldown to avoid wisp spam.
 func (d *Daemon) ensureDoltServerRunning() {
 	if d.doltServer == nil || !d.doltServer.IsEnabled() {
 		return
@@ -625,6 +638,14 @@ func (d *Daemon) ensureDoltServerRunning() {
 
 	if err := d.doltServer.EnsureRunning(); err != nil {
 		d.logger.Printf("Error ensuring Dolt server is running: %v", err)
+	}
+
+	// Option B throttling: pour mol-dog-doctor only on anomaly with cooldown.
+	if warnings := d.doltServer.LastWarnings(); len(warnings) > 0 {
+		if time.Since(d.lastDoctorMolTime) >= doctorMolCooldown {
+			d.lastDoctorMolTime = time.Now()
+			go d.pourDoctorMolecule(warnings)
+		}
 	}
 
 	// Update OTel gauges with the latest Dolt health snapshot.
@@ -638,6 +659,26 @@ func (d *Daemon) ensureDoltServerRunning() {
 			h.Healthy,
 		)
 	}
+}
+
+// pourDoctorMolecule creates a mol-dog-doctor molecule to track a health anomaly.
+// Runs asynchronously — molecule lifecycle is observability, not control flow.
+func (d *Daemon) pourDoctorMolecule(warnings []string) {
+	mol := d.pourDogMolecule("mol-dog-doctor", map[string]string{
+		"port": strconv.Itoa(d.doltServer.config.Port),
+	})
+	defer mol.close()
+
+	// Step 1: probe — connectivity was already checked (we got here because it passed).
+	mol.closeStep("probe")
+
+	// Step 2: inspect — resource checks produced the warnings.
+	mol.closeStep("inspect")
+
+	// Step 3: report — log the warning summary.
+	summary := strings.Join(warnings, "; ")
+	d.logger.Printf("Doctor molecule: %d warning(s): %s", len(warnings), summary)
+	mol.closeStep("report")
 }
 
 // ensureDoltTestServerRunning ensures the dedicated test Dolt server is running.
