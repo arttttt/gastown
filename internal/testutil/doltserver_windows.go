@@ -134,7 +134,7 @@ func startDoltServer() error {
 	cleanProductionTestDBs()
 
 	// Reap zombie test servers from previous crashed test runs.
-	reapStaleDoltServers(10 * time.Minute)
+	reapStaleDoltServers(5 * time.Minute)
 
 	// Determine port: use GT_DOLT_PORT if set externally, otherwise find a free one.
 	// GUARD: Never reuse production port 3307 for tests. beads SDK v0.56.x lacks

@@ -83,7 +83,7 @@ func parseElapsed(s string) time.Duration {
 
 func startDoltServer() error {
 	// Reap zombie test servers from previous crashed test runs.
-	reapStaleDoltServers(10 * time.Minute)
+	reapStaleDoltServers(5 * time.Minute)
 
 	// Clean up any testdb_* dirs leaked onto the production Dolt data dir
 	// by previous test runs (defense-in-depth against stale orphans).
