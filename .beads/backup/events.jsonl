@@ -1056,3 +1056,27 @@
 {"actor":"gastown/refinery","comment":"","created_at":"2026-02-27T17:07:31Z","event_type":"closed","id":4234,"issue_id":"gt-wisp-3ailn","new_value":"patrol cycle complete: Empty queue. Standing by.","old_value":""}
 {"actor":"gastown/refinery","comment":"","created_at":"2026-02-27T17:07:41Z","event_type":"closed","id":4235,"issue_id":"gt-wisp-zengq","new_value":"patrol cycle complete: Empty queue. Idle patrol continues.","old_value":""}
 {"actor":"gastown/refinery","comment":"","created_at":"2026-02-27T17:07:51Z","event_type":"closed","id":4236,"issue_id":"gt-wisp-v9nm9","new_value":"patrol cycle complete: Empty queue. No work.","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-27T17:19:01Z","event_type":"closed","id":4237,"issue_id":"gt-wisp-spacj","new_value":"patrol cycle complete: Empty queue patrol cycle. 0 branches merged, 0 messages, inbox clean. Session healthy (RSS 3MB). Looping.","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-02-27T17:20:53Z","event_type":"closed","id":4238,"issue_id":"gt-wisp-w7o3","new_value":"burned: polecat nuked","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-02-27T17:21:01Z","event_type":"closed","id":4239,"issue_id":"gt-wisp-bghw","new_value":"burned: polecat nuked","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-02-27T17:21:09Z","event_type":"closed","id":4240,"issue_id":"gt-wisp-xjhe","new_value":"burned: polecat nuked","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-02-27T17:21:17Z","event_type":"closed","id":4241,"issue_id":"gt-wisp-2n66","new_value":"burned: polecat nuked","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:21:23Z","event_type":"created","id":4242,"issue_id":"gt-gastown-polecat-furiosa","new_value":"","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:21:24Z","event_type":"closed","id":4243,"issue_id":"gt-wisp-xjhe","new_value":"burned: force re-sling","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:21:30Z","event_type":"created","id":4244,"issue_id":"gt-gastown-polecat-nux","new_value":"","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:21:31Z","event_type":"closed","id":4245,"issue_id":"gt-wisp-bghw","new_value":"burned: force re-sling","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:21:37Z","event_type":"created","id":4246,"issue_id":"gt-gastown-polecat-slit","new_value":"","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:21:39Z","event_type":"closed","id":4247,"issue_id":"gt-wisp-2n66","new_value":"burned: force re-sling","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-02-27T17:22:09Z","event_type":"closed","id":4248,"issue_id":"gt-wisp-npyna","new_value":"burned: polecat nuked","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-02-27T17:22:23Z","event_type":"closed","id":4249,"issue_id":"gt-wisp-5m704","new_value":"burned: polecat nuked","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:22:23Z","event_type":"created","id":4250,"issue_id":"gt-gastown-polecat-furiosa","new_value":"","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:22:25Z","event_type":"closed","id":4251,"issue_id":"gt-wisp-npyna","new_value":"burned: force re-sling","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-02-27T17:22:32Z","event_type":"closed","id":4252,"issue_id":"gt-wisp-zz8ex","new_value":"burned: polecat nuked","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:22:55Z","event_type":"created","id":4253,"issue_id":"gt-gastown-polecat-nux","new_value":"","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:22:56Z","event_type":"closed","id":4254,"issue_id":"gt-wisp-5m704","new_value":"burned: force re-sling","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-02-27T17:22:57Z","event_type":"closed","id":4255,"issue_id":"gt-wisp-3vrn2","new_value":"burned: polecat nuked","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:23:02Z","event_type":"created","id":4256,"issue_id":"gt-gastown-polecat-furiosa","new_value":"","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:23:03Z","event_type":"closed","id":4257,"issue_id":"gt-wisp-zz8ex","new_value":"burned: force re-sling","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:23:58Z","event_type":"created","id":4258,"issue_id":"gt-gastown-polecat-slit","new_value":"","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:24:16Z","event_type":"created","id":4259,"issue_id":"gt-gastown-polecat-slit","new_value":"","old_value":""}
+{"actor":"mayor","comment":"","created_at":"2026-02-27T17:24:18Z","event_type":"closed","id":4260,"issue_id":"gt-wisp-3vrn2","new_value":"burned: force re-sling","old_value":""}
