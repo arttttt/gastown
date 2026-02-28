@@ -78,16 +78,14 @@ func (c *DoltTestServerLeakCheck) Fix(ctx *CheckContext) error {
 
 	var lastErr error
 	for _, z := range c.zombies {
-		// Try graceful shutdown first (SIGTERM)
-		if err := syscall.Kill(z.pid, syscall.SIGTERM); err == nil {
-			// Wait up to 5 seconds for graceful shutdown
-			time.Sleep(5 * time.Second)
-		}
-
-		// Force kill if still running (SIGKILL)
-		if proc, err := os.FindProcess(z.pid); err == nil {
-			_ = proc.Kill()
-			_, _ = proc.Wait()
+		// Try graceful shutdown first (SIGTERM), then poll for exit.
+		_ = syscall.Kill(z.pid, syscall.SIGTERM)
+		if !waitForProcessExit(z.pid, 3*time.Second) {
+			// Still running — force kill.
+			if proc, err := os.FindProcess(z.pid); err == nil {
+				_ = proc.Kill()
+				_, _ = proc.Wait()
+			}
 		}
 
 		// Clean up data directory
@@ -220,4 +218,20 @@ func parseElapsed(s string) time.Duration {
 		time.Duration(hours)*time.Hour +
 		time.Duration(mins)*time.Minute +
 		time.Duration(secs)*time.Second
+}
+
+// waitForProcessExit polls until the process exits or timeout is reached.
+func waitForProcessExit(pid int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			return true
+		}
+		if err := proc.Signal(syscall.Signal(0)); err != nil {
+			return true // process is gone
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
 }

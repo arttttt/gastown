@@ -242,7 +242,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	d.Register(doctor.NewStaleTaskDispatchCheck())
 	d.Register(doctor.NewHooksSyncCheck())
 
-	// Dolt test server leak check (Unix only)
+	// Dolt test server leak check (no-op on Windows where testutil handles reaping)
 	d.Register(doctor.NewDoltTestServerLeakCheck())
 
 	// Dolt data health checks (binary + server reachability moved to top as prerequisites)

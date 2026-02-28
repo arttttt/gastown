@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/steveyegge/gastown/internal/util"
 )
 
 // reapStaleDoltServers finds and kills dolt sql-server processes that:
@@ -214,7 +216,10 @@ func startDoltServer() error {
 	cmd.Stderr = nil
 
 	// Run in own process group so the entire tree can be killed on cleanup.
-	setProcessGroup(cmd)
+	util.SetProcessGroup(cmd)
+	// On Linux, also set Pdeathsig so the server dies if the test process is killed.
+	// See doltserver_pdeathsig_linux.go.
+	setPdeathsig(cmd)
 
 	if err := cmd.Start(); err != nil {
 		_ = os.RemoveAll(dataDir)
