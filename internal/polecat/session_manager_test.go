@@ -437,8 +437,15 @@ func TestVerifyStartupNudgeDelivery_IdleAgent(t *testing.T) {
 	tm := tmux.NewTmux()
 	sessionName := "gt-test-nudge-verify-" + t.Name()
 
-	// Kill any orphaned session from a previous interrupted test run.
+	// Kill any orphaned session from a previous interrupted test run,
+	// then wait for tmux to fully destroy it (kill-session can be async).
 	_ = tm.KillSession(sessionName)
+	for i := 0; i < 20; i++ {
+		if exists, _ := tm.HasSession(sessionName); !exists {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	// Create a tmux session with a shell
 	if err := tm.NewSession(sessionName, os.TempDir()); err != nil {
