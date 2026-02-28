@@ -1303,13 +1303,7 @@ func nukePolecatFull(polecatName, rigName string, mgr *polecat.Manager, r *rig.R
 	// Remote branch is only deleted when there is NO pending MR — otherwise
 	// the refinery would find the source branch missing and fail to merge.
 	if branchToDelete != "" {
-		var repoGit *git.Git
-		bareRepoPath := filepath.Join(r.Path, ".repo.git")
-		if info, statErr := os.Stat(bareRepoPath); statErr == nil && info.IsDir() {
-			repoGit = git.NewGitWithDir(bareRepoPath, "")
-		} else {
-			repoGit = git.NewGit(filepath.Join(r.Path, "mayor", "rig"))
-		}
+		repoGit := getRepoGitForRig(r.Path)
 		if err := repoGit.DeleteBranch(branchToDelete, true); err != nil {
 			fmt.Printf("  %s branch delete: %v\n", style.Dim.Render("○"), err)
 		} else {
