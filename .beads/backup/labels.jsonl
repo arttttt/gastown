@@ -74,6 +74,8 @@
 {"issue_id":"gt-s4fcs","label":"seance"}
 {"issue_id":"gt-s4fcs","label":"ux"}
 {"issue_id":"gt-utbjv","label":"worker-lifecycle"}
+{"issue_id":"gt-wisp-08kk9","label":"backoff-until:1772242099"}
+{"issue_id":"gt-wisp-1bmva","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-28xm","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-28xm","label":"stale:polecat-nuked"}
 {"issue_id":"gt-wisp-71ha","label":"gt:merge-request"}
@@ -84,9 +86,11 @@
 {"issue_id":"gt-wisp-mbiq","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-mbiq","label":"stale:polecat-nuked"}
 {"issue_id":"gt-wisp-mk4v","label":"gt:merge-request"}
+{"issue_id":"gt-wisp-molml","label":"idle:5"}
 {"issue_id":"gt-wisp-nlgfh","label":"idle:1"}
 {"issue_id":"gt-wisp-o5lw","label":"idle:1"}
 {"issue_id":"gt-wisp-o6t0","label":"gt:merge-request"}
+{"issue_id":"gt-wisp-w0iaz","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-w6o6","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-wslq","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-ycc4","label":"gt:merge-request"}
