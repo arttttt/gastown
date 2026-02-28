@@ -11,10 +11,130 @@ import (
 	"time"
 )
 
+// reapStaleDoltServers finds and kills dolt sql-server processes that:
+//   - Have a command line containing "dolt-test-server" (test servers, not production)
+//   - Have been running for longer than maxAge
+//
+// This prevents zombie test servers from accumulating when test processes
+// are killed and CleanupDoltServer never runs.
+func reapStaleDoltServers(maxAge time.Duration) {
+	// Use tasklist with verbose output to get command line and creation time.
+	// Format: Image Name, PID, Session Name, Session#, Mem Usage, Status, User Name, CPU Time, Window Title, Command Line
+	out, err := exec.Command("tasklist", "/FO", "CSV", "/V", "/FI", "IMAGENAME eq dolt.exe").Output()
+	if err != nil {
+		// tasklist returns error if no matching processes, which is fine
+		return
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines[1:] { // Skip header
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Parse CSV: handle quoted fields
+		fields := parseCSVLine(line)
+		if len(fields) < 10 {
+			continue
+		}
+
+		commandLine := fields[9]
+		if !strings.Contains(commandLine, "sql-server") || !strings.Contains(commandLine, "dolt-test-server") {
+			continue
+		}
+
+		// Don't kill production servers
+		if strings.Contains(commandLine, "--port 3307") {
+			continue
+		}
+
+		// Get PID
+		pidStr := strings.Trim(fields[1], "\"")
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil || pid <= 0 {
+			continue
+		}
+
+		// Get process creation time using wmic
+		creationTime, err := getProcessCreationTime(pid)
+		if err != nil {
+			continue
+		}
+
+		age := time.Since(creationTime)
+		if age < maxAge {
+			continue
+		}
+
+		// Kill the stale test server
+		_ = exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/F").Run()
+	}
+}
+
+// getProcessCreationTime returns the creation time of a process using wmic.
+func getProcessCreationTime(pid int) (time.Time, error) {
+	out, err := exec.Command("wmic", "process", "where", fmt.Sprintf("ProcessId=%d", pid),
+		"get", "CreationDate", "/FORMAT:CSV").Output()
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines[1:] {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ",")
+		if len(fields) >= 2 {
+			// CreationDate format: YYYYMMDDHHMMSS.milliseconds+offset
+			dateStr := fields[len(fields)-1]
+			if len(dateStr) >= 14 {
+				// Parse YYYYMMDDHHMMSS
+				t, err := time.Parse("20060102150405", dateStr[:14])
+				if err != nil {
+					return time.Time{}, err
+				}
+				return t, nil
+			}
+		}
+	}
+	return time.Time{}, fmt.Errorf("could not parse creation time")
+}
+
+// parseCSVLine parses a simple CSV line handling quoted fields.
+func parseCSVLine(line string) []string {
+	var fields []string
+	var current strings.Builder
+	inQuotes := false
+
+	for _, r := range line {
+		switch r {
+		case '"':
+			inQuotes = !inQuotes
+		case ',':
+			if inQuotes {
+				current.WriteRune(r)
+			} else {
+				fields = append(fields, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+	fields = append(fields, current.String())
+	return fields
+}
+
 func startDoltServer() error {
 	// Clean up any testdb_* dirs leaked onto the production Dolt data dir
 	// by previous test runs (defense-in-depth against stale orphans).
 	cleanProductionTestDBs()
+
+	// Reap zombie test servers from previous crashed test runs.
+	reapStaleDoltServers(10 * time.Minute)
 
 	// Determine port: use GT_DOLT_PORT if set externally, otherwise find a free one.
 	// GUARD: Never reuse production port 3307 for tests. beads SDK v0.56.x lacks
