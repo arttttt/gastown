@@ -3,6 +3,7 @@
 package testutil
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -208,7 +209,7 @@ func startDoltServer() error {
 		return fmt.Errorf("creating dolt data dir: %w", err)
 	}
 
-	cmd := exec.Command("dolt", "sql-server",
+	cmd := exec.CommandContext(context.Background(), "dolt", "sql-server",
 		"--port", doltTestPort,
 		"--data-dir", dataDir,
 	)
