@@ -158,16 +158,14 @@ type MRInfo struct {
 type MRAnomaly struct {
 	ID       string        `json:"id"`
 	Branch   string        `json:"branch"`
-	Type     string        `json:"type"`     // stale-claim | orphaned-branch
-	Severity string        `json:"severity"` // warning | critical
+	Type     string        `json:"type"` // stale-claim | orphaned-branch
 	Assignee string        `json:"assignee,omitempty"`
 	Age      time.Duration `json:"age,omitempty"`
 	Detail   string        `json:"detail"`
 }
 
 const (
-	staleClaimWarningAfter  = 2 * time.Hour
-	staleClaimCriticalAfter = 6 * time.Hour
+	staleClaimWarningAfter = 2 * time.Hour
 )
 
 // errMergeSlotTimeout is returned by acquireMainPushSlot when retries are
@@ -1055,12 +1053,7 @@ func (e *Engineer) createConflictResolutionTaskForMR(mr *MRInfo, _ ProcessResult
 		}
 	}
 
-	// Priority boost: decrease priority number (lower = higher priority)
-	// P2 -> P1, P1 -> P0, P0 stays P0
-	boostedPriority := mr.Priority - 1
-	if boostedPriority < 0 {
-		boostedPriority = 0
-	}
+	// ZFC: pass raw priority. Agent decides boost strategy.
 
 	// Increment retry count for tracking
 	retryCount := mr.RetryCount + 1
@@ -1099,7 +1092,7 @@ The Refinery will automatically retry the merge after you force-push.`,
 	task, err := e.beads.Create(beads.CreateOptions{
 		Title:       taskTitle,
 		Type:        "task",
-		Priority:    boostedPriority,
+		Priority:    mr.Priority,
 		Description: description,
 		Actor:       e.rig.Name + "/refinery",
 	})
@@ -1380,15 +1373,10 @@ func detectQueueAnomalies(
 			if err == nil {
 				age := now.Sub(updatedAt)
 				if age >= staleClaimWarningAfter {
-					severity := "warning"
-					if age >= staleClaimCriticalAfter {
-						severity = "critical"
-					}
 					anomalies = append(anomalies, &MRAnomaly{
 						ID:       issue.ID,
 						Branch:   fields.Branch,
 						Type:     "stale-claim",
-						Severity: severity,
 						Assignee: issue.Assignee,
 						Age:      age,
 						Detail:   "MR is claimed but not progressing",
@@ -1398,14 +1386,14 @@ func detectQueueAnomalies(
 		}
 
 		// 2) Orphaned branch detection.
+		// ZFC: report raw anomaly data. Agent decides severity.
 		localExists, remoteTrackingExists, err := branchExistsFn(fields.Branch)
 		if err == nil && !localExists && !remoteTrackingExists {
 			anomalies = append(anomalies, &MRAnomaly{
-				ID:       issue.ID,
-				Branch:   fields.Branch,
-				Type:     "orphaned-branch",
-				Severity: "critical",
-				Detail:   "MR branch is missing locally and in origin/* tracking refs",
+				ID:     issue.ID,
+				Branch: fields.Branch,
+				Type:   "orphaned-branch",
+				Detail: "MR branch is missing locally and in origin/* tracking refs",
 			})
 		}
 	}
