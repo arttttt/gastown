@@ -304,8 +304,10 @@ func executeSling(params SlingParams) (*SlingResult, error) {
 	hookDir := beads.ResolveHookDir(townRoot, beadToHook, hookWorkDir)
 	if err := hookBeadWithRetry(beadToHook, targetAgent, hookDir); err != nil {
 		// Clean up orphaned polecat to avoid leaving spawned-but-unhookable polecats
-		// Include convoyID so the rollback can close the auto-convoy if one was created
-		cleanupSpawnedPolecatWithConvoy(spawnInfo, params.RigName, convoyID)
+		cleanupSpawnedPolecat(spawnInfo, params.RigName)
+		if convoyID != "" {
+			closeConvoy(convoyID, "Sling rollback - hook failed")
+		}
 		result.ErrMsg = "hook failed"
 		return result, fmt.Errorf("failed to hook bead: %w", err)
 	}

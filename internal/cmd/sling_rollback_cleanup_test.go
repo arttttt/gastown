@@ -188,9 +188,9 @@ func TestCleanupSpawnedPolecat_WithNilSpawnInfo(t *testing.T) {
 	cleanupSpawnedPolecat(nil, "gastown")
 }
 
-// TestCleanupSpawnedPolecatWithConvoy_ClosesConvoy verifies that the convoy is closed
+// TestCloseConvoy_ClosesConvoy verifies that the convoy is closed
 // when a convoyID is provided.
-func TestCleanupSpawnedPolecatWithConvoy_ClosesConvoy(t *testing.T) {
+func TestCloseConvoy_ClosesConvoy(t *testing.T) {
 	townRoot, _ := filepath.EvalSymlinks(t.TempDir())
 
 	// Create minimal workspace structure
@@ -257,7 +257,7 @@ exit 0
 		t.Fatalf("chdir: %v", err)
 	}
 
-	// Call cleanupSpawnedPolecatWithConvoy with a convoyID
+	// Call cleanupSpawnedPolecat with a convoyID
 	spawnInfo := &SpawnedPolecatInfo{
 		RigName:     "gastown",
 		PolecatName: "Toast",
@@ -265,7 +265,8 @@ exit 0
 		Branch:      "p-toast-123",
 	}
 
-	cleanupSpawnedPolecatWithConvoy(spawnInfo, "gastown", "convoy-test-123")
+	cleanupSpawnedPolecat(spawnInfo, "gastown")
+	closeConvoy("convoy-test-123", "test cleanup")
 
 	// Check if close command was logged
 	logContent, err := os.ReadFile(filepath.Join(townRoot, "bd_close.log"))
@@ -285,8 +286,8 @@ exit 0
 	_ = closeCommands
 }
 
-// TestCleanupSpawnedPolecatWithConvoy_EmptyConvoyID skips convoy close when convoyID is empty.
-func TestCleanupSpawnedPolecatWithConvoy_EmptyConvoyID(t *testing.T) {
+// TestCloseConvoy_EmptyConvoyID skips convoy close when convoyID is empty.
+func TestCloseConvoy_EmptyConvoyID(t *testing.T) {
 	townRoot, _ := filepath.EvalSymlinks(t.TempDir())
 
 	// Create minimal workspace structure
@@ -353,7 +354,7 @@ exit 0
 		t.Fatalf("chdir: %v", err)
 	}
 
-	// Call cleanupSpawnedPolecatWithConvoy with EMPTY convoyID
+	// Call cleanupSpawnedPolecat with EMPTY convoyID
 	spawnInfo := &SpawnedPolecatInfo{
 		RigName:     "gastown",
 		PolecatName: "Toast",
@@ -361,7 +362,8 @@ exit 0
 		Branch:      "p-toast-123",
 	}
 
-	cleanupSpawnedPolecatWithConvoy(spawnInfo, "gastown", "") // Empty convoyID
+	cleanupSpawnedPolecat(spawnInfo, "gastown")
+	// Do NOT call closeConvoy — this test verifies empty convoyID path
 
 	// Check if close command was logged (should NOT be)
 	_, err = os.ReadFile(filepath.Join(townRoot, "bd_close.log"))

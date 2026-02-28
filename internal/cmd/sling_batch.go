@@ -218,15 +218,9 @@ func runBatchSling(beadIDs []string, rigName string, townBeadsDir string) error 
 	return nil
 }
 
-// cleanupSpawnedPolecat removes a polecat that was spawned but whose hook failed,
-// preventing orphaned polecats from accumulating.
+// cleanupSpawnedPolecat removes a polecat that was spawned but whose session/hook failed,
+// preventing orphaned polecats from accumulating. Cleans up worktree, agent bead, and git branch.
 func cleanupSpawnedPolecat(spawnInfo *SpawnedPolecatInfo, rigName string) {
-	cleanupSpawnedPolecatWithConvoy(spawnInfo, rigName, "")
-}
-
-// cleanupSpawnedPolecatWithConvoy removes a polecat and optionally closes the associated convoy.
-// This is used when the hook fails after an auto-convoy was created, to prevent orphaned convoys.
-func cleanupSpawnedPolecatWithConvoy(spawnInfo *SpawnedPolecatInfo, rigName, convoyID string) {
 	townRoot, err := workspace.FindFromCwdOrError()
 	if err != nil {
 		return
@@ -257,11 +251,6 @@ func cleanupSpawnedPolecatWithConvoy(spawnInfo *SpawnedPolecatInfo, rigName, con
 	if spawnInfo.Branch != "" {
 		repoGit := getRepoGitForRig(r.Path)
 		deletePolecatBranch(spawnInfo.Branch, repoGit, false)
-	}
-
-	// Close the auto-convoy if one was created
-	if convoyID != "" {
-		closeConvoy(convoyID, "Sling rollback - hook failed")
 	}
 }
 
@@ -351,7 +340,7 @@ func deletePolecatBranch(branchName string, repoGit *git.Git, hasPendingMR bool)
 	if err := repoGit.DeleteBranch(branchName, true); err != nil {
 		fmt.Printf("  %s branch delete: %v\n", style.Dim.Render("○"), err)
 	} else {
-		fmt.Printf("  %s deleted local branch %s\n", style.Dim.Render("○"), branchName)
+		fmt.Printf("  %s deleted local branch %s\n", style.Success.Render("✓"), branchName)
 	}
 	if hasPendingMR {
 		fmt.Printf("  %s skipped remote branch delete (MR pending in merge queue)\n", style.Dim.Render("○"))
@@ -359,7 +348,7 @@ func deletePolecatBranch(branchName string, repoGit *git.Git, hasPendingMR bool)
 		if err := repoGit.DeleteRemoteBranch("origin", branchName); err != nil {
 			fmt.Printf("  %s remote branch delete: %v\n", style.Dim.Render("○"), err)
 		} else {
-			fmt.Printf("  %s deleted remote branch %s\n", style.Dim.Render("○"), branchName)
+			fmt.Printf("  %s deleted remote branch %s\n", style.Success.Render("✓"), branchName)
 		}
 	}
 }
