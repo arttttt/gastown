@@ -204,8 +204,13 @@ func New(config *Config) (*Daemon, error) {
 		logger.Printf("Warning: bd not found in PATH, subprocess calls may fail")
 	}
 
-	// Initialize restart tracker with exponential backoff
-	restartTracker := NewRestartTracker(config.TownRoot)
+	// Initialize restart tracker with exponential backoff.
+	// Parameters are configurable via patrols.restart_tracker in daemon.json.
+	var rtCfg RestartTrackerConfig
+	if patrolConfig != nil && patrolConfig.Patrols != nil && patrolConfig.Patrols.RestartTracker != nil {
+		rtCfg = *patrolConfig.Patrols.RestartTracker
+	}
+	restartTracker := NewRestartTracker(config.TownRoot, rtCfg)
 	if err := restartTracker.Load(); err != nil {
 		logger.Printf("Warning: failed to load restart state: %v", err)
 	}

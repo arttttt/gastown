@@ -74,7 +74,7 @@ func TestCheckDeaconHeartbeat_RespectsCrashLoopGuard(t *testing.T) {
 		t.Fatalf("write heartbeat: %v", err)
 	}
 
-	rt := NewRestartTracker(townRoot)
+	rt := NewRestartTracker(townRoot, RestartTrackerConfig{})
 	rt.state.Agents["deacon"] = &AgentRestartInfo{
 		CrashLoopSince: time.Now().Add(-5 * time.Minute),
 	}

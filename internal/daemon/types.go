@@ -128,6 +128,7 @@ type PatrolsConfig struct {
 	JanitorDog     *JanitorDogConfig      `json:"janitor_dog,omitempty"`
 	CompactorDog           *CompactorDogConfig            `json:"compactor_dog,omitempty"`
 	ScheduledMaintenance   *ScheduledMaintenanceConfig    `json:"scheduled_maintenance,omitempty"`
+	RestartTracker         *RestartTrackerConfig          `json:"restart_tracker,omitempty"`
 }
 
 // DoltRemotesConfig holds configuration for the dolt_remotes patrol.
