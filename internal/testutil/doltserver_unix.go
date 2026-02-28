@@ -147,6 +147,9 @@ func startDoltServer() error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 
+	// Run in own process group so the entire tree can be killed on cleanup.
+	setProcessGroup(cmd)
+
 	if err := cmd.Start(); err != nil {
 		_ = os.RemoveAll(dataDir)
 		_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
@@ -281,3 +284,4 @@ func CleanupDoltServer() {
 	_ = os.Remove(pidPath)
 	_ = os.Remove(LockFilePathForPort(doltTestPort))
 }
+
