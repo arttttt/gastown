@@ -166,6 +166,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	// start with missing PATH exports. See gt-99u.
 	d.Register(doctor.NewClaudeSettingsCheck())
 	d.Register(doctor.NewDaemonCheck())
+	d.Register(doctor.NewTmuxGlobalEnvCheck())
 	d.Register(doctor.NewBootHealthCheck())
 	d.Register(doctor.NewTownBeadsConfigCheck())
 	d.Register(doctor.NewCustomTypesCheck())

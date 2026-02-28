@@ -1055,6 +1055,21 @@ func detectTownRootFromCwd() string {
 		}
 	}
 
+	// Final fallback: read GT_TOWN_ROOT from tmux global environment.
+	// This handles the run-shell case where CWD is $HOME and process env
+	// vars aren't set — the daemon sets GT_TOWN_ROOT in tmux global env.
+	if socket := tmux.SocketFromEnv(); socket != "" {
+		t := tmux.NewTmuxWithSocket(socket)
+		if envRoot, err := t.GetGlobalEnvironment("GT_TOWN_ROOT"); err == nil && envRoot != "" {
+			if _, statErr := os.Stat(filepath.Join(envRoot, workspace.PrimaryMarker)); statErr == nil {
+				return envRoot
+			}
+			if info, statErr := os.Stat(filepath.Join(envRoot, workspace.SecondaryMarker)); statErr == nil && info.IsDir() {
+				return envRoot
+			}
+		}
+	}
+
 	return ""
 }
 

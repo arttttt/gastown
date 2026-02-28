@@ -155,6 +155,14 @@ func New(config *Config) (*Daemon, error) {
 		logger.Printf("Warning: failed to initialize town registry: %v", err)
 	}
 
+	// Set GT_TOWN_ROOT in tmux global environment so run-shell subprocesses
+	// (e.g., gt cycle next/prev) can find the workspace even when CWD is $HOME.
+	// Non-fatal: tmux server may not be running yet — daemon creates sessions shortly.
+	t := tmux.NewTmux()
+	if err := t.SetGlobalEnvironment("GT_TOWN_ROOT", config.TownRoot); err != nil {
+		logger.Printf("Warning: failed to set GT_TOWN_ROOT in tmux global env: %v", err)
+	}
+
 	// Load patrol config from mayor/daemon.json (optional - nil if missing)
 	patrolConfig := LoadPatrolConfig(config.TownRoot)
 	if patrolConfig != nil {

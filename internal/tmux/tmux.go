@@ -1864,6 +1864,27 @@ func (t *Tmux) GetEnvironment(session, key string) (string, error) {
 	return parts[1], nil
 }
 
+// SetGlobalEnvironment sets an environment variable in the tmux global environment.
+// Unlike SetEnvironment, this is not scoped to a session — it applies server-wide.
+func (t *Tmux) SetGlobalEnvironment(key, value string) error {
+	_, err := t.run("set-environment", "-g", key, value)
+	return err
+}
+
+// GetGlobalEnvironment gets an environment variable from the tmux global environment.
+func (t *Tmux) GetGlobalEnvironment(key string) (string, error) {
+	out, err := t.run("show-environment", "-g", key)
+	if err != nil {
+		return "", err
+	}
+	// Output format: KEY=value
+	parts := strings.SplitN(out, "=", 2)
+	if len(parts) != 2 {
+		return "", fmt.Errorf("unexpected global environment format for %s: %q", key, out)
+	}
+	return parts[1], nil
+}
+
 // GetAllEnvironment returns all environment variables for a session.
 func (t *Tmux) GetAllEnvironment(session string) (map[string]string, error) {
 	out, err := t.run("show-environment", "-t", session)
