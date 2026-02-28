@@ -55,6 +55,7 @@ Cleanup checks (fixable):
   - misclassified-wisps      Detect issues that should be wisps (purges to wisps table, fixable)
   - jsonl-bloat              Detect stale/bloated issues.jsonl vs live database
   - stale-beads-redirect     Detect stale files in .beads directories with redirects
+  - dolt-test-server-leaks   Detect zombie dolt sql-server processes from test runs
 
 Clone divergence checks:
   - persistent-role-branches Detect witness/refinery not on main (excludes crew)
@@ -240,6 +241,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	// Hooks sync check
 	d.Register(doctor.NewStaleTaskDispatchCheck())
 	d.Register(doctor.NewHooksSyncCheck())
+
+	// Dolt test server leak check (Unix only)
+	d.Register(doctor.NewDoltTestServerLeakCheck())
 
 	// Dolt data health checks (binary + server reachability moved to top as prerequisites)
 	d.Register(doctor.NewDoltMetadataCheck())
