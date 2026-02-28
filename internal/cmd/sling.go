@@ -1060,11 +1060,6 @@ func rollbackSlingArtifacts(spawnInfo *SpawnedPolecatInfo, beadID, hookWorkDir, 
 		}
 	}
 
-	// 3. Clean up the spawned polecat (worktree, agent bead, etc.)
-	cleanupSpawnedPolecat(spawnInfo, spawnInfo.RigName)
-
-	// 4. Close the auto-convoy if one was created
-	if convoyID != "" {
-		closeConvoy(convoyID, "Sling rollback - formula or session failed")
-	}
+	// 3. Clean up the spawned polecat (worktree, agent bead, convoy, etc.)
+	cleanupSpawnedPolecat(spawnInfo, spawnInfo.RigName, convoyID)
 }

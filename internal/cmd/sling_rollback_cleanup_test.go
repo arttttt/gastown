@@ -89,7 +89,7 @@ exit 0
 	}
 
 	// This should not panic and should attempt to delete the branch
-	cleanupSpawnedPolecat(spawnInfo, "gastown")
+	cleanupSpawnedPolecat(spawnInfo, "gastown", "")
 
 	// If we get here without panic, the test passes for the basic code path
 	t.Logf("cleanupSpawnedPolecat with Branch completed without panic")
@@ -164,7 +164,7 @@ exit 0
 	}
 
 	// This should complete without attempting branch deletion
-	cleanupSpawnedPolecat(spawnInfo, "gastown")
+	cleanupSpawnedPolecat(spawnInfo, "gastown", "")
 
 	// If we get here, the empty branch check works
 	t.Logf("cleanupSpawnedPolecat with empty Branch completed without panic")
@@ -185,7 +185,7 @@ func TestCleanupSpawnedPolecat_WithNilSpawnInfo(t *testing.T) {
 		}
 	}()
 
-	cleanupSpawnedPolecat(nil, "gastown")
+	cleanupSpawnedPolecat(nil, "gastown", "")
 }
 
 // TestCloseConvoy_ClosesConvoy verifies that the convoy is closed
@@ -265,8 +265,7 @@ exit 0
 		Branch:      "p-toast-123",
 	}
 
-	cleanupSpawnedPolecat(spawnInfo, "gastown")
-	closeConvoy("convoy-test-123", "test cleanup")
+	cleanupSpawnedPolecat(spawnInfo, "gastown", "convoy-test-123")
 
 	// Check if close command was logged
 	logContent, err := os.ReadFile(filepath.Join(townRoot, "bd_close.log"))
@@ -362,7 +361,7 @@ exit 0
 		Branch:      "p-toast-123",
 	}
 
-	cleanupSpawnedPolecat(spawnInfo, "gastown")
+	cleanupSpawnedPolecat(spawnInfo, "gastown", "")
 	// Do NOT call closeConvoy — this test verifies empty convoyID path
 
 	// Check if close command was logged (should NOT be)

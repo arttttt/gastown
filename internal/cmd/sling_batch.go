@@ -219,8 +219,9 @@ func runBatchSling(beadIDs []string, rigName string, townBeadsDir string) error 
 }
 
 // cleanupSpawnedPolecat removes a polecat that was spawned but whose session/hook failed,
-// preventing orphaned polecats from accumulating. Cleans up worktree, agent bead, and git branch.
-func cleanupSpawnedPolecat(spawnInfo *SpawnedPolecatInfo, rigName string) {
+// preventing orphaned polecats from accumulating. Cleans up worktree, agent bead, git branch,
+// and optionally the associated auto-convoy.
+func cleanupSpawnedPolecat(spawnInfo *SpawnedPolecatInfo, rigName, convoyID string) {
 	townRoot, err := workspace.FindFromCwdOrError()
 	if err != nil {
 		return
@@ -251,6 +252,11 @@ func cleanupSpawnedPolecat(spawnInfo *SpawnedPolecatInfo, rigName string) {
 	if spawnInfo.Branch != "" {
 		repoGit := getRepoGitForRig(r.Path)
 		deletePolecatBranch(spawnInfo.Branch, repoGit, false)
+	}
+
+	// Close the auto-convoy if one was created
+	if convoyID != "" {
+		closeConvoy(convoyID, "Sling rollback - hook failed")
 	}
 }
 
