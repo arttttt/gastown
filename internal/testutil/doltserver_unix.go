@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -26,6 +27,8 @@ func reapStaleDoltServers(maxAge time.Duration) {
 	if err != nil {
 		return
 	}
+
+	var killedPIDs []int
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.Contains(line, "dolt sql-server") || !strings.Contains(line, "dolt-test-server") {
@@ -50,8 +53,71 @@ func reapStaleDoltServers(maxAge time.Duration) {
 		// Kill the stale test server
 		if proc, err := os.FindProcess(pid); err == nil {
 			_ = proc.Kill()
+			killedPIDs = append(killedPIDs, pid)
 		}
 	}
+
+	// Clean up PID and lock files for killed processes (or stale files pointing to dead processes)
+	cleanupStalePIDFiles(killedPIDs)
+}
+
+// cleanupStalePIDFiles removes PID and lock files that match killed PIDs
+// or point to processes that are no longer running.
+func cleanupStalePIDFiles(killedPIDs []int) {
+	tmpDir := os.TempDir()
+	pattern := filepath.Join(tmpDir, "dolt-test-server-*.pid")
+	pidFiles, err := filepath.Glob(pattern)
+	if err != nil {
+		return
+	}
+
+	killedPIDSet := make(map[int]bool)
+	for _, pid := range killedPIDs {
+		killedPIDSet[pid] = true
+	}
+
+	for _, pidFile := range pidFiles {
+		data, err := os.ReadFile(pidFile)
+		if err != nil {
+			// Can't read, try to remove anyway (file may be corrupted)
+			_ = os.Remove(pidFile)
+			continue
+		}
+
+		lines := strings.SplitN(string(data), "\n", 2)
+		if len(lines) == 0 {
+			// Empty/corrupted file, remove it
+			_ = os.Remove(pidFile)
+			continue
+		}
+
+		pidStr := strings.TrimSpace(lines[0])
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			// Invalid PID, remove the file
+			_ = os.Remove(pidFile)
+			continue
+		}
+
+		// Remove if we killed this PID, or if the process is no longer running
+		if killedPIDSet[pid] || !isProcessRunning(pid) {
+			_ = os.Remove(pidFile)
+			// Also remove corresponding lock file
+			lockFile := strings.TrimSuffix(pidFile, ".pid") + ".lock"
+			_ = os.Remove(lockFile)
+		}
+	}
+}
+
+// isProcessRunning returns true if a process with the given PID exists.
+func isProcessRunning(pid int) bool {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	// On Unix, FindProcess always succeeds, so we need to send signal 0 to check
+	err = proc.Signal(syscall.Signal(0))
+	return err == nil
 }
 
 // parseElapsed converts ps etime format (HH:MM:SS or MM:SS or DD-HH:MM:SS) to duration.
