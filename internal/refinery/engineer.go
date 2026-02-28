@@ -112,20 +112,35 @@ type MergeQueueConfig struct {
 	// GatesParallel controls whether gates run concurrently.
 	// When true, all gates start simultaneously; any failure = overall failure.
 	GatesParallel bool `json:"gates_parallel"`
+
+	// StaleClaimWarningAfter is how long a claimed MR can sit without updates
+	// before it triggers a "warning" severity anomaly.
+	StaleClaimWarningAfter time.Duration `json:"stale_claim_warning_after"`
+
+	// StaleClaimCriticalAfter is how long a claimed MR can sit without updates
+	// before it triggers a "critical" severity anomaly.
+	StaleClaimCriticalAfter time.Duration `json:"stale_claim_critical_after"`
+
+	// MaxRetryCount is the maximum number of conflict resolution retries
+	// before escalation to Mayor.
+	MaxRetryCount int `json:"max_retry_count"`
 }
 
 // DefaultMergeQueueConfig returns sensible defaults for merge queue configuration.
 func DefaultMergeQueueConfig() *MergeQueueConfig {
 	return &MergeQueueConfig{
-		Enabled:              true,
-		OnConflict:           "assign_back",
-		RunTests:             true,
-		TestCommand:          "",
-		DeleteMergedBranches: true,
-		RetryFlakyTests:      1,
-		PollInterval:         30 * time.Second,
-		MaxConcurrent:        1,
-		StaleClaimTimeout:    DefaultStaleClaimTimeout,
+		Enabled:                 true,
+		OnConflict:              "assign_back",
+		RunTests:                true,
+		TestCommand:             "",
+		DeleteMergedBranches:    true,
+		RetryFlakyTests:         1,
+		PollInterval:            30 * time.Second,
+		MaxConcurrent:           1,
+		StaleClaimTimeout:       DefaultStaleClaimTimeout,
+		StaleClaimWarningAfter:  2 * time.Hour,
+		StaleClaimCriticalAfter: 6 * time.Hour,
+		MaxRetryCount:           5,
 	}
 }
 
@@ -165,10 +180,6 @@ type MRAnomaly struct {
 	Detail   string        `json:"detail"`
 }
 
-const (
-	staleClaimWarningAfter  = 2 * time.Hour
-	staleClaimCriticalAfter = 6 * time.Hour
-)
 
 // errMergeSlotTimeout is returned by acquireMainPushSlot when retries are
 // exhausted due to slot contention. Infrastructure errors (beads down,
@@ -1345,7 +1356,7 @@ func (e *Engineer) ListQueueAnomalies(now time.Time) ([]*MRAnomaly, error) {
 		return nil, fmt.Errorf("querying beads for merge-requests: %w", err)
 	}
 
-	return detectQueueAnomalies(issues, now, func(branch string) (bool, bool, error) {
+	return detectQueueAnomalies(issues, now, e.config.StaleClaimWarningAfter, e.config.StaleClaimCriticalAfter, func(branch string) (bool, bool, error) {
 		localExists, err := e.git.BranchExists(branch)
 		if err != nil {
 			return false, false, err
@@ -1361,6 +1372,7 @@ func (e *Engineer) ListQueueAnomalies(now time.Time) ([]*MRAnomaly, error) {
 func detectQueueAnomalies(
 	issues []*beads.Issue,
 	now time.Time,
+	warningAfter, criticalAfter time.Duration,
 	branchExistsFn func(branch string) (localExists bool, remoteTrackingExists bool, err error),
 ) []*MRAnomaly {
 	var anomalies []*MRAnomaly
@@ -1379,9 +1391,9 @@ func detectQueueAnomalies(
 			updatedAt, err := time.Parse(time.RFC3339, issue.UpdatedAt)
 			if err == nil {
 				age := now.Sub(updatedAt)
-				if age >= staleClaimWarningAfter {
+				if age >= warningAfter {
 					severity := "warning"
-					if age >= staleClaimCriticalAfter {
+					if age >= criticalAfter {
 						severity = "critical"
 					}
 					anomalies = append(anomalies, &MRAnomaly{

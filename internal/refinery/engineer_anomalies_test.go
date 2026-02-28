@@ -30,7 +30,7 @@ worker: nux`,
 		},
 	}
 
-	anomalies := detectQueueAnomalies(issues, now, func(branch string) (bool, bool, error) {
+	anomalies := detectQueueAnomalies(issues, now, 2*time.Hour, 6*time.Hour, func(branch string) (bool, bool, error) {
 		return true, false, nil
 	})
 
@@ -74,7 +74,7 @@ worker: nux`,
 		},
 	}
 
-	anomalies := detectQueueAnomalies(issues, now, func(branch string) (bool, bool, error) {
+	anomalies := detectQueueAnomalies(issues, now, 2*time.Hour, 6*time.Hour, func(branch string) (bool, bool, error) {
 		if branch == "polecat/orphan" {
 			return false, false, nil
 		}
