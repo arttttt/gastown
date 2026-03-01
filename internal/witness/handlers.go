@@ -971,7 +971,8 @@ type DetectZombiePolecatsResult struct {
 // DetectZombiePolecats cross-references polecat agent state with tmux session
 // existence and agent process liveness to find zombie polecats. Two zombie classes:
 //   - Session-dead: tmux session is dead but agent bead still shows agent_state=
-//     "working", "running", or "spawning", or has a hook_bead assigned.
+//     "working" or "running", or has a hook_bead assigned. Note: "spawning" state
+//     is exempt for 5 minutes (gt sling creates the bead before the session).
 //   - Agent-dead: tmux session exists but the agent process (Claude/node) inside
 //     it has died. Detected via IsAgentAlive. See gt-kj6r6.
 //
@@ -1228,7 +1229,24 @@ func detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, session
 	}
 
 	// Standard zombie detection: active state or hooked bead with dead session.
-	agentState, hookBead := getAgentBeadState(workDir, agentBeadID)
+	agentState, hookBead, updatedAt := getAgentBeadStateWithTimestamp(workDir, agentBeadID)
+
+	// Spawning guard (GitHub #2036): polecats in agent_state=spawning have
+	// hook_bead set atomically by gt sling before the tmux session is created.
+	// A dead session during spawning is expected, not a zombie. Skip if the
+	// bead was updated within the last 5 minutes (matching the daemon's guard
+	// in checkPolecatHealth). After 5 minutes, treat as a stuck spawn.
+	if agentState == "spawning" {
+		if ts, err := time.Parse(time.RFC3339, updatedAt); err == nil {
+			if time.Since(ts) < 5*time.Minute {
+				return ZombieResult{}, false
+			}
+		} else {
+			// Can't parse timestamp — be safe, skip during spawning
+			return ZombieResult{}, false
+		}
+	}
+
 	if !isZombieState(agentState, hookBead) {
 		return ZombieResult{}, false
 	}
@@ -1259,11 +1277,18 @@ func detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, session
 }
 
 // isZombieState returns true if the agent state or hook bead indicates a zombie.
+// Note: "spawning" is NOT a zombie state — it's a transient startup state where
+// the bead has been created with hook_bead set but the tmux session hasn't been
+// launched yet. Spawning polecats are handled by the spawning guard in
+// detectZombieDeadSession. See GitHub #2036.
 func isZombieState(agentState, hookBead string) bool {
+	if agentState == "spawning" {
+		return false
+	}
 	if hookBead != "" {
 		return true
 	}
-	return agentState == "working" || agentState == "running" || agentState == "spawning"
+	return agentState == "working" || agentState == "running"
 }
 
 // handleZombieRestart determines the restart action for a confirmed zombie (gt-dsgp).
@@ -1709,21 +1734,29 @@ func clearCompletionMetadata(workDir, agentBeadID string) error {
 // getAgentBeadState reads agent_state and hook_bead from an agent bead.
 // Returns the agent_state string and hook_bead ID.
 func getAgentBeadState(workDir, agentBeadID string) (agentState, hookBead string) {
+	state, hook, _ := getAgentBeadStateWithTimestamp(workDir, agentBeadID)
+	return state, hook
+}
+
+// getAgentBeadStateWithTimestamp reads agent_state, hook_bead, and updated_at
+// from an agent bead. The updatedAt string is in RFC3339 format.
+func getAgentBeadStateWithTimestamp(workDir, agentBeadID string) (agentState, hookBead, updatedAt string) {
 	output, err := util.ExecWithOutput(workDir, bdCommand, "show", agentBeadID, "--json")
 	if err != nil || output == "" {
-		return "", ""
+		return "", "", ""
 	}
 
 	// Parse JSON response — bd show --json returns an array
 	var issues []struct {
 		AgentState string `json:"agent_state"`
 		HookBead   string `json:"hook_bead"`
+		UpdatedAt  string `json:"updated_at"`
 	}
 	if err := json.Unmarshal([]byte(output), &issues); err != nil || len(issues) == 0 {
-		return "", ""
+		return "", "", ""
 	}
 
-	return issues[0].AgentState, issues[0].HookBead
+	return issues[0].AgentState, issues[0].HookBead, issues[0].UpdatedAt
 }
 
 // getBeadStatus returns the status of a bead (e.g., "open", "closed", "hooked").
