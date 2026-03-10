@@ -19,6 +19,7 @@ import (
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/daemon"
 	"github.com/steveyegge/gastown/internal/formula"
+	rigpkg "github.com/steveyegge/gastown/internal/rig"
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/style"
 	"github.com/steveyegge/gastown/internal/telemetry"
@@ -1077,19 +1078,27 @@ func isSlingConfigError(err error) bool {
 }
 
 // loadRigCommandVars reads rig settings and returns --var key=value strings
-// for all configured build pipeline commands (setup, typecheck, lint, test, build).
-// Only non-empty commands are included; empty means "skip" in the formula.
+// for all configured build pipeline commands (setup, typecheck, lint, test, build)
+// and the default branch (base_branch). Only non-empty values are included.
 func loadRigCommandVars(townRoot, rig string) []string {
 	if townRoot == "" || rig == "" {
 		return nil
 	}
+	var vars []string
+
+	// Load default_branch from rig root config.json (single source of truth per 5ee9abcc).
+	// This sets base_branch for formula instantiation so polecats fork from the right branch.
+	rigCfg, err := rigpkg.LoadRigConfig(filepath.Join(townRoot, rig))
+	if err == nil && rigCfg != nil && rigCfg.DefaultBranch != "" {
+		vars = append(vars, fmt.Sprintf("base_branch=%s", rigCfg.DefaultBranch))
+	}
+
 	settingsPath := filepath.Join(townRoot, rig, "settings", "config.json")
 	settings, err := config.LoadRigSettings(settingsPath)
 	if err != nil || settings == nil || settings.MergeQueue == nil {
-		return nil
+		return vars
 	}
 	mq := settings.MergeQueue
-	var vars []string
 	if mq.SetupCommand != "" {
 		vars = append(vars, fmt.Sprintf("setup_command=%s", mq.SetupCommand))
 	}

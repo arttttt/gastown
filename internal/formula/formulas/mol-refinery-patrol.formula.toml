@@ -48,19 +48,19 @@ source of truth.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| wisp_type | patrol | Type of wisp created for this molecule |
-| integration_branch_refinery_enabled | true | Whether refinery merges to integration branches |
-| integration_branch_auto_land | false | Whether to auto-land integration branches when epic children all closed |
-| run_tests | true | Whether to run tests before merging |
-| setup_command | (empty) | Setup/install command (e.g., `pnpm install`). Empty = skip. |
-| typecheck_command | (empty) | Type check command (e.g., `tsc --noEmit`). Empty = skip. |
-| lint_command | (empty) | Lint command (e.g., `eslint .`). Empty = skip. |
-| test_command | go test ./... | Test command to run (if run_tests is true) |
-| build_command | (empty) | Build command (e.g., `go build ./...`). Empty = skip. |
-| target_branch | main | Default target branch for merges |
-| delete_merged_branches | true | Whether to delete source branches after merge |
-| judgment_enabled | false | Enable quality review for merges (true/false) |
-| review_depth | standard | Review depth: quick, standard, or deep |
+| wisp_type | {{wisp_type}} | Type of wisp created for this molecule |
+| integration_branch_refinery_enabled | {{integration_branch_refinery_enabled}} | Whether refinery merges to integration branches |
+| integration_branch_auto_land | {{integration_branch_auto_land}} | Whether to auto-land integration branches when epic children all closed |
+| run_tests | {{run_tests}} | Whether to run tests before merging |
+| setup_command | {{setup_command}} | Setup/install command (e.g., `pnpm install`). Empty = skip. |
+| typecheck_command | {{typecheck_command}} | Type check command (e.g., `tsc --noEmit`). Empty = skip. |
+| lint_command | {{lint_command}} | Lint command (e.g., `eslint .`). Empty = skip. |
+| test_command | {{test_command}} | Test command to run (if run_tests is true) |
+| build_command | {{build_command}} | Build command (e.g., `go build ./...`). Empty = skip. |
+| target_branch | {{target_branch}} | Default target branch for merges |
+| delete_merged_branches | {{delete_merged_branches}} | Whether to delete source branches after merge |
+| judgment_enabled | {{judgment_enabled}} | Enable quality review for merges (true/false) |
+| review_depth | {{review_depth}} | Review depth: quick, standard, or deep |
 
 ## Target Resolution Rule
 
@@ -81,7 +81,7 @@ resolve that placeholder with this rule:
 You MUST process steps in strict DAG order. Walk through each step sequentially,
 unless you are explicitly told to skip to a step."""
 formula = "mol-refinery-patrol"
-version = 9
+version = 10
 
 [vars]
 [vars.wisp_type]
