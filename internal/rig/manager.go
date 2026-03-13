@@ -780,6 +780,21 @@ Use crew for your own workspace. Polecats are for batch work dispatch.
 		return nil, fmt.Errorf("creating settings dir: %w", err)
 	}
 
+	// Seed rig settings from repository if .gastown/settings.json exists.
+	// This makes repo-committed settings immediately visible to `gt rig settings show`
+	// and ensures polecats get the right test/build commands from the first sling.
+	repoSettings, err := config.LoadRepoSettings(mayorRigPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  Warning: could not read repo settings: %v\n", err)
+	} else if repoSettings != nil {
+		rigSettingsFile := filepath.Join(rigSettingsPath, "config.json")
+		if data, err := json.MarshalIndent(repoSettings, "", "  "); err == nil {
+			if err := os.WriteFile(rigSettingsFile, data, 0644); err == nil {
+				fmt.Printf("   ✓ Seeded rig settings from %s\n", config.RepoSettingsPath)
+			}
+		}
+	}
+
 	// Create rig-level agent beads (witness, refinery) in rig beads.
 	// Town-level agents (mayor, deacon) are created by gt install in town beads.
 	if err := m.initAgentBeads(rigPath, opts.Name, opts.BeadsPrefix); err != nil {
